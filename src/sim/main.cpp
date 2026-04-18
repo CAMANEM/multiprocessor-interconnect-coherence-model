@@ -4,14 +4,27 @@
 #include <systemc>
 
 #include "top.hpp"
-#include "trace_parser.hpp"
 
 namespace {
 
+/**
+ * Prints command-line syntax to stderr.
+ *
+ * @param argv0 executable name (argv[0])
+ */
 void usage(const char* argv0) {
   std::cerr << "Usage: " << argv0 << " --trace <file.trace> [--protocol msi|firefly]\n";
 }
 
+/**
+ * Parses simulation command-line arguments.
+ *
+ * @param argc argument count
+ * @param argv arguments (argv[0] is the program name)
+ * @param trace_path output: path to trace file
+ * @param proto output: selected coherence protocol (MSI or Firefly)
+ * @return true if arguments are valid and trace_path is non-empty
+ */
 bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherenceProtocolKind& proto) {
   trace_path.clear();
   proto = mp::CoherenceProtocolKind::Msi;
@@ -40,6 +53,13 @@ bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherencePr
 
 }  // namespace
 
+/**
+ * SystemC entry: validates CLI, loads trace, elaborates Top, runs until end of simulation.
+ *
+ * @param argc argument count
+ * @param argv command-line arguments
+ * @return process exit code (0 success, 2 bad usage, 3 trace error)
+ */
 int sc_main(int argc, char* argv[]) {
   std::string trace_path;
   mp::CoherenceProtocolKind proto = mp::CoherenceProtocolKind::Msi;

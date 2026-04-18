@@ -5,10 +5,20 @@
 
 namespace {
 
+/**
+ * Prints trace generator usage to stderr.
+ *
+ * @param argv0 executable name
+ */
 void print_usage(const char* argv0) {
   std::cerr << "Usage: " << argv0 << " --workload pc|migratory --output <file.trace>\n";
 }
 
+/**
+ * Writes a synthetic producer-consumer trace to os (shared line 0x8000).
+ *
+ * @param os open output stream
+ */
 void write_producer_consumer(std::ostream& os) {
   os << "# CE4302 trace v1\n";
   os << "# Workload: producer-consumer (shared line ~0x8000)\n";
@@ -21,6 +31,11 @@ void write_producer_consumer(std::ostream& os) {
   }
 }
 
+/**
+ * Writes a synthetic migratory trace to os (line 0x9000, round-robin PE0..PE3).
+ *
+ * @param os open output stream
+ */
 void write_migratory(std::ostream& os) {
   os << "# CE4302 trace v1\n";
   os << "# Workload: migratory pattern (same line handed across PEs)\n";
@@ -41,6 +56,13 @@ void write_migratory(std::ostream& os) {
 
 }  // namespace
 
+/**
+ * Parses --workload and --output, writes the selected trace file.
+ *
+ * @param argc argument count
+ * @param argv arguments
+ * @return 0 on success, 2 on bad usage or unknown workload, 3 if output cannot be opened
+ */
 int main(int argc, char* argv[]) {
   std::string workload;
   std::string output;

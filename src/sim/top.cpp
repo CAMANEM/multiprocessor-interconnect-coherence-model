@@ -4,6 +4,13 @@
 
 namespace mp {
 
+/**
+ * Instantiates L1 and PE per index, registers processes, and binds TLM sockets.
+ *
+ * @param name SystemC module name
+ * @param trace loaded trace file
+ * @param protocol coherence selection forwarded to each L1Cache
+ */
 Top::Top(sc_core::sc_module_name name, const TraceFile& trace, CoherenceProtocolKind protocol)
     : sc_module(name),
       monitor_(),

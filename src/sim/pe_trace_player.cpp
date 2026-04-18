@@ -6,12 +6,22 @@
 
 namespace mp {
 
+/**
+ * Registers the SC_THREAD that will run thread_main.
+ *
+ * @param name SystemC module name
+ * @param pe_id PE identifier
+ * @param entries memory accesses assigned to this PE
+ */
 PeTracePlayer::PeTracePlayer(sc_core::sc_module_name name, int pe_id,
                              std::vector<TraceEntry> entries)
     : sc_module(name), socket("socket"), pe_id_(pe_id), entries_(std::move(entries)) {
   SC_THREAD(thread_main);
 }
 
+/**
+ * Runs the PE trace: waits until tick (ns), builds payload, calls b_transport.
+ */
 void PeTracePlayer::thread_main() {
   for (const TraceEntry& e : entries_) {
     const sc_core::sc_time abs_time(static_cast<double>(e.tick), sc_core::SC_NS);

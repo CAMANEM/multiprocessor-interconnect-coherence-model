@@ -6,6 +6,13 @@
 
 namespace mp {
 
+/**
+ * Initializes mem_ and registers b_transport on socket.
+ *
+ * @param name SystemC module name
+ * @param read_latency read delay
+ * @param write_latency write delay
+ */
 SharedMemory::SharedMemory(sc_core::sc_module_name name, const sc_core::sc_time& read_latency,
                            const sc_core::sc_time& write_latency)
     : sc_module(name),
@@ -16,6 +23,9 @@ SharedMemory::SharedMemory(sc_core::sc_module_name name, const sc_core::sc_time&
   socket.register_b_transport(this, &SharedMemory::b_transport);
 }
 
+/**
+ * Performs read or write on mem_ with bounds check and delay accounting.
+ */
 void SharedMemory::b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
   tlm::tlm_command cmd = trans.get_command();
   sc_dt::uint64 addr = trans.get_address();

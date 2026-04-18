@@ -2,6 +2,8 @@
 
 Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE4302 — Arquitectura de Computadores II). Este repositorio contiene una base ejecutable: **4 PEs** como *trace players*, **L1 privadas** (stub passthrough), **interconnect** con cuatro puertos hacia **memoria compartida**, y **monitor** de métricas agregadas.
 
+**Código:** cabeceras `.hpp` en [`include/sim/`](include/sim/) (modelo SystemC) y [`include/common/`](include/common/) (parser de trazas); implementaciones `.cpp` en [`src/sim/`](src/sim/) y [`src/common/`](src/common/). CMake añade esas rutas al compilador; en el código se usa `#include "nombre.hpp"`.
+
 ## Requisitos
 
 - **CMake** 3.16 o superior

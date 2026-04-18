@@ -8,6 +8,14 @@
 namespace mp {
 namespace {
 
+/**
+ * Parses an unsigned integer token in the given radix.
+ *
+ * @param token string to parse (must be consumed entirely)
+ * @param base numeric base (e.g. 10 or 16)
+ * @param out parsed value written on success
+ * @return true on successful parse
+ */
 bool parse_uint64(const std::string& token, int base, std::uint64_t& out) {
   try {
     std::size_t idx = 0;
@@ -22,6 +30,13 @@ bool parse_uint64(const std::string& token, int base, std::uint64_t& out) {
   }
 }
 
+/**
+ * Parses a signed decimal integer from a full token string.
+ *
+ * @param token string to parse
+ * @param out parsed value
+ * @return true on successful parse
+ */
 bool parse_int(const std::string& token, int& out) {
   try {
     std::size_t idx = 0;
@@ -36,6 +51,12 @@ bool parse_int(const std::string& token, int& out) {
   }
 }
 
+/**
+ * Trims leading and trailing whitespace (operates on a copy).
+ *
+ * @param s string to trim
+ * @return trimmed copy
+ */
 std::string trim(std::string s) {
   auto not_space = [](unsigned char c) { return !std::isspace(c); };
   s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
@@ -45,6 +66,9 @@ std::string trim(std::string s) {
 
 }  // namespace
 
+/**
+ * Loads from disk, validates each line, and sorts entries_ at the end.
+ */
 bool TraceFile::load(const std::string& path, std::string& error_out) {
   entries_.clear();
   std::ifstream in(path);
@@ -136,6 +160,9 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
   return true;
 }
 
+/**
+ * Returns a copy of entries whose pe_id matches the argument.
+ */
 std::vector<TraceEntry> TraceFile::entries_for_pe(int pe_id) const {
   std::vector<TraceEntry> out;
   out.reserve(entries_.size());
