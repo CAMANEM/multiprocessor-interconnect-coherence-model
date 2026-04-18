@@ -3,9 +3,20 @@
 
 #include <systemc>
 
+#include "log.hpp"
 #include "top.hpp"
 
 namespace {
+
+std::string ascii_lower(std::string s) {
+  for (char& c : s) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return s;
+}
+
 
 /**
  * Prints command-line syntax to stderr.
@@ -13,7 +24,9 @@ namespace {
  * @param argv0 executable name (argv[0])
  */
 void usage(const char* argv0) {
-  std::cerr << "Usage: " << argv0 << " --trace <file.trace> [--protocol msi|firefly]\n";
+  std::cerr << "Usage: " << argv0
+            << " --trace <file.trace> [--protocol msi|firefly] [--log-level error|warn|info|debug] "
+               "[-v]\n";
 }
 
 /**
@@ -23,11 +36,14 @@ void usage(const char* argv0) {
  * @param argv arguments (argv[0] is the program name)
  * @param trace_path output: path to trace file
  * @param proto output: selected coherence protocol (MSI or Firefly)
+ * @param log_level output: least severe log level to print (-v sets Info)
  * @return true if arguments are valid and trace_path is non-empty
  */
-bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherenceProtocolKind& proto) {
+bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherenceProtocolKind& proto,
+                mp::LogLevel& log_level) {
   trace_path.clear();
   proto = mp::CoherenceProtocolKind::Msi;
+  log_level = mp::LogLevel::Warn;
 
   for (int i = 1; i < argc; ++i) {
     const std::string a(argv[i]);
@@ -43,6 +59,22 @@ bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherencePr
         std::cerr << "Unknown protocol: " << p << "\n";
         return false;
       }
+    } else if (a == "--log-level" && i + 1 < argc) {
+      const std::string pl = ascii_lower(argv[++i]);
+      if (pl == "error") {
+        log_level = mp::LogLevel::Error;
+      } else if (pl == "warn") {
+        log_level = mp::LogLevel::Warn;
+      } else if (pl == "info") {
+        log_level = mp::LogLevel::Info;
+      } else if (pl == "debug") {
+        log_level = mp::LogLevel::Debug;
+      } else {
+        std::cerr << "Unknown log level: " << pl << "\n";
+        return false;
+      }
+    } else if (a == "-v") {
+      log_level = mp::LogLevel::Info;
     } else {
       return false;
     }
@@ -63,10 +95,13 @@ bool parse_args(int argc, char* argv[], std::string& trace_path, mp::CoherencePr
 int sc_main(int argc, char* argv[]) {
   std::string trace_path;
   mp::CoherenceProtocolKind proto = mp::CoherenceProtocolKind::Msi;
-  if (!parse_args(argc, argv, trace_path, proto)) {
+  mp::LogLevel log_level = mp::LogLevel::Warn;
+  if (!parse_args(argc, argv, trace_path, proto, log_level)) {
     usage(argv[0]);
     return 2;
   }
+
+  mp::Log::set_min_level(log_level);
 
   mp::TraceFile trace;
   std::string err;

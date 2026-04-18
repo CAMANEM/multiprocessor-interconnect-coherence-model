@@ -67,6 +67,7 @@ if(MP_BUILD_SIM)
   add_executable(
     mp_sim
     sim/main.cpp
+    sim/log.cpp
     sim/top.cpp
     sim/pe_trace_player.cpp
     sim/l1_cache.cpp

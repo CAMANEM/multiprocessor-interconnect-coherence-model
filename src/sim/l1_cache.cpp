@@ -1,8 +1,12 @@
 #include <cstdint>
 
+#include <iomanip>
+#include <sstream>
+
 #include <tlm>
 
 #include "l1_cache.hpp"
+#include "log.hpp"
 #include "monitor.hpp"
 
 namespace mp {
@@ -56,6 +60,11 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
     monitor_->on_cache_state_change(cache_id_, line_addr, CacheStateLabel::Invalid,
                                     CacheStateLabel::Invalid);
   }
+
+  std::ostringstream os;
+  os << "[L1_" << cache_id_ << "] passthrough line=0x" << std::hex << line_addr << std::dec << " cmd="
+     << (trans.get_command() == tlm::TLM_READ_COMMAND ? "R" : "W");
+  Log::debug(os.str());
 
   delay += lookup_latency_;
   mem_socket->b_transport(trans, delay);
