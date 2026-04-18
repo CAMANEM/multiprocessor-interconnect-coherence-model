@@ -119,14 +119,21 @@ Desde la raiz del proyecto:
 ./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly
 ```
 
-Con logs en consola:
+Con logs y monitor en consola :
 
 ```bash
 ./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug
 ./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug
 ```
 
-Con logs en mp.log:
+Con logs en mp.log y monitor en consola:
+
+```bash
+./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug 2> mp.log
+./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug 2> mp.log
+```
+
+Con logs y monitor en mp.log:
 
 ```bash
 ./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug > mp.log 2>&1
