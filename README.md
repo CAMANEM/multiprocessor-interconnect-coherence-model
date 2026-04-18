@@ -8,7 +8,43 @@ Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE430
 - Compilador **C++17**
 - **SystemC** (IEEE 1666) con cabeceras TLM; por ejemplo [Accellera SystemC](https://www.accellera.org/downloads/standards/systemc)
 
-## Configurar SystemC (portable)
+## Instalación
+
+### En windows instalar Msys2 y ejecutar en él:
+
+```bash
+pacman -Syu
+# cierra y vuelve a abrir la terminal si MSYS2 lo pide
+pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake make git
+```
+
+### Ya sea Linux o Windows (en Mingw64/Ucrt64 en el caso de windows) ejecutar:
+
+```bash
+pacman -S --needed git
+git clone https://github.com/accellera-official/systemc.git
+cd systemc
+mkdir build
+cd build
+cmake -G "MinGW Makefiles" -DCMAKE_INSTALL_PREFIX=/mingw64 ..
+cmake --build . --config Release
+cmake --install .
+```
+
+## Ejecución
+
+### Ahora abrir otra consola en el directorio src de este proyecto y ejecutar:
+
+```bash
+# Windows la primera vez:
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/mingw64
+# Linux:
+cmake -S . -B build
+# Windows/Linux:
+cmake --build build
+```
+
+## Configurar SystemC (portable) (ignorar, la mayoria de esta seccion deberia borrarla)
 
 1. Instala o compila SystemC y localiza el prefijo que contiene `include/systemc/` y la biblioteca (`libsystemc` / `systemc.lib`).
 2. Exporta la variable de entorno apuntando al prefijo:
