@@ -57,11 +57,27 @@ else()
   endif()
 endif()
 
-add_subdirectory(common)
-add_subdirectory(tools)
+# mp_common (trace parser shared by tools and sim)
+add_library(mp_common STATIC common/trace_parser.cpp)
+target_include_directories(mp_common PUBLIC "${CMAKE_SOURCE_DIR}/../include/common")
+
+add_executable(tracegen tools/tracegen.cpp)
 
 if(MP_BUILD_SIM)
-  add_subdirectory(sim)
+  add_executable(
+    mp_sim
+    sim/main.cpp
+    sim/top.cpp
+    sim/pe_trace_player.cpp
+    sim/l1_cache.cpp
+    sim/interconnect.cpp
+    sim/shared_memory.cpp
+    sim/monitor.cpp)
+
+  find_package(Threads REQUIRED)
+
+  target_include_directories(mp_sim PRIVATE "${CMAKE_SOURCE_DIR}/../include/sim")
+  target_link_libraries(mp_sim PRIVATE mp_common ${MP_SYSTEMC_TARGET} Threads::Threads)
 else()
   message(
     WARNING

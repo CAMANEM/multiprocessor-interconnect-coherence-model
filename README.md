@@ -46,6 +46,8 @@ cmake -S . -B build
 cmake --build build
 ```
 
+
+
 ## Configurar SystemC (portable) (ignorar, la mayoria de esta seccion deberia borrarla)
 
 1. Instala o compila SystemC y localiza el prefijo que contiene `include/systemc/` y la biblioteca (`libsystemc` / `systemc.lib`).
@@ -101,18 +103,20 @@ tick pe_id R|W address [size]
 
 Ejemplos versionados en [`traces/producer_consumer.trace`](traces/producer_consumer.trace) y [`traces/migratory.trace`](traces/migratory.trace).
 
+Desde la raiz del proyecto:
+
 ### Regenerar trazas largas
 
 ```bash
-./build/tracegen --workload pc --output traces/pc_long.trace
-./build/tracegen --workload migratory --output traces/migratory_long.trace
+./src/build/tracegen --workload pc --output src/traces/pc_long.trace
+./src/build/tracegen --workload migratory --output src/traces/migratory_long.trace
 ```
 
 ## Ejecutar la simulación
 
 ```bash
-./build/mp_sim --trace traces/producer_consumer.trace --protocol msi
-./build/mp_sim --trace traces/migratory.trace --protocol firefly
+./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi
+./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly
 ```
 
 `--protocol` se acepta en CLI y se propaga al modelo L1 como **selección arquitectónica** (la lógica MSI/Firefly aún es un stub).
