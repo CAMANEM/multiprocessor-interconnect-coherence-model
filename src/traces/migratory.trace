@@ -1,8 +1,14 @@
 # CE4302 trace v1 (checked-in example; regenerate with tools/tracegen)
 # Workload: migratory pattern on line 0x9000
-0 0 W 0x9000 4
+0 0 R 0x9000 4
+1 0 W 0x9000 4 0
 10 1 R 0x9000 4
+11 1 W 0x9000 4 1
 20 2 R 0x9000 4
-30 3 W 0x9000 4
+21 2 W 0x9000 4 2
+30 3 R 0x9000 4
+31 3 W 0x9000 4 3
 40 0 R 0x9000 4
-50 1 W 0x9000 4
+41 0 W 0x9000 4 4
+50 1 R 0x9000 4
+51 1 W 0x9000 4 5
