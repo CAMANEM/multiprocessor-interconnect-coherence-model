@@ -1,3 +1,7 @@
+#include <iomanip>
+#include <sstream>
+#include <tlm>
+#include "log.hpp"
 #include "interconnect.hpp"
 #include "l1_cache.hpp"
 #include "monitor.hpp"
@@ -46,6 +50,15 @@ void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type) 
  */
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
+  const tlm::tlm_command cmd = trans.get_command();
+  if (Log::enabled(LogLevel::Info)) {
+    std::ostringstream os;
+    os << "[IC] port=" << port_id << ' '
+       << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
+       << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
+       << trans.get_data_length() << " hop=" << hop_latency_.to_string();
+    Log::info(os.str());
+  }
 
   const uint64_t addr = trans.get_address();
 

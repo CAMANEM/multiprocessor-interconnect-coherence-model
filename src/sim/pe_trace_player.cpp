@@ -1,11 +1,14 @@
 #include "pe_trace_player.hpp"
 
+#include <iomanip>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <cstring>
 
 #include <tlm>
+
+#include "log.hpp"
 
 namespace mp {
 
@@ -151,8 +154,16 @@ void PeTracePlayer::thread_main() {
     wait(local_delay);
 
     if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-      std::cerr << name() << ": TLM error addr=0x" << std::hex << e.address << std::dec
-                << " status=" << static_cast<int>(trans.get_response_status()) << "\n";
+      std::ostringstream es;
+      es << '[' << name() << "] TLM error addr=0x" << std::hex << e.address << std::dec
+         << " status=" << static_cast<int>(trans.get_response_status());
+      Log::error(es.str());
+    } else {
+      std::ostringstream os;
+      os << "[PE" << pe_id_ << "] " << (e.op == MemoryOperation::Read ? "R" : "W") << " addr=0x"
+         << std::hex << e.address << std::dec << " size=" << e.size
+         << " delay=" << local_delay.to_string();
+      Log::info(os.str());
     }
   }
 }

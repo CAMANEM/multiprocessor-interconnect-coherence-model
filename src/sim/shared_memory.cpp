@@ -7,6 +7,8 @@
 
 #include <tlm>
 
+#include "log.hpp"
+
 namespace mp {
 
 /**
@@ -102,6 +104,13 @@ void SharedMemory::b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time
   delay += mem_delay;
   trans.set_response_status(tlm::TLM_OK_RESPONSE);
   trans.set_dmi_allowed(false);
+
+  if (Log::enabled(LogLevel::Debug)) {
+    std::ostringstream os;
+    os << "[MEM] " << (cmd == tlm::TLM_READ_COMMAND ? "R" : "W") << " addr=0x" << std::hex
+       << addr << std::dec << " len=" << len << " mem_delay=" << mem_delay.to_string();
+    Log::debug(os.str());
+  }
 }
 
 }  // namespace mp

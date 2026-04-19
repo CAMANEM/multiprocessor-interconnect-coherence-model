@@ -119,7 +119,31 @@ Desde la raiz del proyecto:
 ./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly
 ```
 
+Con logs y monitor en consola :
+
+```bash
+./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug
+./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug
+```
+
+Con logs en mp.log y monitor en consola:
+
+```bash
+./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug 2> mp.log
+./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug 2> mp.log
+```
+
+Con logs y monitor en mp.log:
+
+```bash
+./src/build/mp_sim --trace src/traces/producer_consumer.trace --protocol msi --log-level debug > mp.log 2>&1
+./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug > mp.log 2>&1
+```
+
+
 `--protocol` se acepta en CLI y se propaga al modelo L1 como **selección arquitectónica** (la lógica MSI/Firefly aún es un stub).
+
+**Log / bitácora:** los mensajes van a **stderr** (no a stdout). `> bus.log` en PowerShell o bash solo redirige stdout, así que la bitácora **no** entra ahí. Para guardarla: `./src/build/mp_sim ... --log-level debug 2> bus.log` (el resumen del monitor sigue en stdout). `--log-level` acepta el nivel en cualquier mezcla de mayúsculas (`debug`, `Debug`, `DEBUG`). Para guardar bitácora y resumen en un solo archivo: `... > all.log 2>&1` (PowerShell y bash).
 
 Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 
