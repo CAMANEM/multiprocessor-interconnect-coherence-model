@@ -58,12 +58,14 @@ void Interconnect::b_transport3(tlm::tlm_generic_payload& trans, sc_core::sc_tim
 void Interconnect::forward(int port_id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
   const tlm::tlm_command cmd = trans.get_command();
-  std::ostringstream os;
-  os << "[IC] port=" << port_id << ' '
-     << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
-     << " addr=0x" << std::hex << trans.get_address() << std::dec << " len=" << trans.get_data_length()
-     << " hop=" << hop_latency_.to_string();
-  Log::info(os.str());
+  if (Log::enabled(LogLevel::Info)) {
+    std::ostringstream os;
+    os << "[IC] port=" << port_id << ' '
+       << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
+       << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
+       << trans.get_data_length() << " hop=" << hop_latency_.to_string();
+    Log::info(os.str());
+  }
 
   const sc_core::sc_time t0 = delay;
   delay += hop_latency_;
