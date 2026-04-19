@@ -8,6 +8,22 @@
 
 namespace mp {
 
+namespace {
+
+const char* bus_txn_name(BusTransaction type) {
+  switch (type) {
+    case BusTransaction::BusRd:
+      return "BusRd";
+    case BusTransaction::BusRdX:
+      return "BusRdX";
+    case BusTransaction::BusUpd:
+      return "BusUpd";
+  }
+  return "Unknown";
+}
+
+}  // namespace
+
 /**
  * Constructor: initializes sockets and registers handlers.
  */
@@ -37,10 +53,11 @@ void Interconnect::register_cache(int id, L1Cache* cache) {
 /**
  * Broadcasts a snoop to all caches except the requester.
  */
-void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type) {
+void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type,
+                             const tlm::tlm_generic_payload* trans) {
   for (int i = 0; i < kPorts; ++i) {
     if (i != requester && caches_[i]) {
-      caches_[i]->snoop(addr, type);
+      caches_[i]->snoop(addr, type, trans);
     }
   }
 }
@@ -51,22 +68,23 @@ void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type) 
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
   const tlm::tlm_command cmd = trans.get_command();
+  const CoherenceHintExtension* hint = trans.get_extension<CoherenceHintExtension>();
+  const BusTransaction bus_txn = hint ? hint->transaction
+                                      : (trans.is_write() ? BusTransaction::BusRdX
+                                                          : BusTransaction::BusRd);
+
   if (Log::enabled(LogLevel::Info)) {
     std::ostringstream os;
-    os << "[IC] port=" << port_id << ' '
-     os << "[IC] port=" << id << ' '
+    os << "[IC] port=" << id << ' '
        << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
+       << " txn=" << bus_txn_name(bus_txn)
        << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
        << trans.get_data_length() << " hop=" << latency_.to_string();
     Log::info(os.str());
   }
 
   const uint64_t addr = trans.get_address();
-
-  if (trans.is_write())
-    snoop_all(id, addr, BusTransaction::BusRdX);
-  else
-    snoop_all(id, addr, BusTransaction::BusRd);
+  snoop_all(id, addr, bus_txn, &trans);
 
   const sc_core::sc_time t0 = delay;
 
@@ -77,7 +95,8 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
     monitor_->record_bus_transaction(
         id,
         static_cast<uint64_t>(trans.get_data_length()),
-        delay - t0);
+        delay - t0,
+        bus_txn);
   }
 }
 

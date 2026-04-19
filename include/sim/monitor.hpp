@@ -7,6 +7,8 @@
 
 namespace mp {
 
+enum class BusTransaction : std::uint8_t;
+
 /** Cache line state labels (reserved for MSI/Firefly instrumentation). */
 enum class CacheStateLabel : std::uint8_t {
   // Placeholders for future MSI/Firefly instrumentation
@@ -29,8 +31,10 @@ public:
    * @param pe_id port or PE index; may be -1 if not applicable
    * @param bytes number of bytes transferred in this transaction
    * @param latency attributed latency (TLM time delta)
+   * @param type coherence transaction kind observed on the bus
    */
-  void record_bus_transaction(int pe_id, std::uint64_t bytes, const sc_core::sc_time& latency);
+  void record_bus_transaction(int pe_id, std::uint64_t bytes, const sc_core::sc_time& latency,
+                              BusTransaction type);
 
   /**
    * Hook reserved for cache line state transitions (logging / visualization).
@@ -58,6 +62,18 @@ public:
    */
   sc_core::sc_time total_latency() const { return total_latency_; }
 
+  /** @return number of BusRd transactions recorded. */
+  std::uint64_t bus_rd_transactions() const { return bus_rd_transactions_; }
+
+  /** @return number of BusRdX transactions recorded. */
+  std::uint64_t bus_rdx_transactions() const { return bus_rdx_transactions_; }
+
+  /** @return number of BusUpd transactions recorded. */
+  std::uint64_t bus_upd_transactions() const { return bus_upd_transactions_; }
+
+  /** @return total number of observed cache state transitions. */
+  std::uint64_t cache_state_transitions() const { return cache_state_transitions_; }
+
   /**
    * Writes one human-readable summary line with aggregate counters.
    *
@@ -68,6 +84,10 @@ public:
 private:
   std::uint64_t bus_transactions_{0};
   std::uint64_t bus_bytes_{0};
+  std::uint64_t bus_rd_transactions_{0};
+  std::uint64_t bus_rdx_transactions_{0};
+  std::uint64_t bus_upd_transactions_{0};
+  std::uint64_t cache_state_transitions_{0};
   sc_core::sc_time total_latency_{sc_core::SC_ZERO_TIME};
 };
 

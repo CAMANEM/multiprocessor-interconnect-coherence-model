@@ -1,6 +1,6 @@
 # multiprocessor-interconnect-coherence-model
 
-Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE4302 — Arquitectura de Computadores II). Este repositorio contiene una base ejecutable: **4 PEs** como *trace players*, **L1 privadas** (stub passthrough), **interconnect** con cuatro puertos hacia **memoria compartida**, y **monitor** de métricas agregadas.
+Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE4302 — Arquitectura de Computadores II). Este repositorio contiene una base ejecutable: **4 PEs** como *trace players*, **L1 privadas** con selección de protocolo (**MSI** y **Firefly simplificado**), **interconnect** con cuatro puertos hacia **memoria compartida**, y **monitor** de métricas agregadas.
 
 **Código:** cabeceras `.hpp` en [`include/sim/`](include/sim/) (modelo SystemC) y [`include/common/`](include/common/) (parser de trazas); implementaciones `.cpp` en [`src/sim/`](src/sim/) y [`src/common/`](src/common/). CMake añade esas rutas al compilador; en el código se usa `#include "nombre.hpp"`.
 
@@ -141,13 +141,19 @@ Con logs y monitor en mp.log:
 ```
 
 
-`--protocol` se acepta en CLI y se propaga al modelo L1 como **selección arquitectónica** (la lógica MSI/Firefly aún es un stub).
+`--protocol` se acepta en CLI y se aplica en `L1Cache` como **selección arquitectónica activa**:
+
+- `msi`: política write-invalidate (BusRd / BusRdX).
+- `firefly`: modelo simplificado write-update sobre líneas compartidas (`BusUpd`). En escrituras sobre estado `S`, la caché emisora se mantiene en `S` y publica update al resto de caches.
+- En ambos protocolos, miss de escritura en `I` sigue usando `BusRdX`.
+
+Alcance actual de Firefly: el simulador modela coherencia de **estados y tráfico** y, para `BusUpd`, aplica los bytes del write en las líneas compartidas de los sharers.
 
 **Log / bitácora:** los mensajes van a **stderr** (no a stdout). `> bus.log` en PowerShell o bash solo redirige stdout, así que la bitácora **no** entra ahí. Para guardarla: `./src/build/mp_sim ... --log-level debug 2> bus.log` (el resumen del monitor sigue en stdout). `--log-level` acepta el nivel en cualquier mezcla de mayúsculas (`debug`, `Debug`, `DEBUG`). Para guardar bitácora y resumen en un solo archivo: `... > all.log 2>&1` (PowerShell y bash).
 
 Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 
-`bus_txns=... bus_bytes=... total_latency=...`
+`bus_txns=... bus_bytes=... total_latency=... bus_rd=... bus_rdx=... bus_upd=... state_transitions=...`
 
 ## Git y Demo 2 (referencia de flujo)
 
@@ -162,7 +168,7 @@ Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 ## Próximos pasos sugeridos (no implementados aún)
 
 - Tabla y justificación de **transacciones de coherencia** (p. ej. `GetS`, `GetM`, `Inv`, `WB`) sobre TLM.
-- Estados **MSI** y **Firefly** en `L1Cache` + tráfico en `Interconnect`.
+- Estados extendidos para Firefly completo (p. ej. `E`/`O`) y tabla formal de transiciones.
 - Tercer workload de **alta contención** para el rubro final (tres trazas frente a ambos protocolos).
 
 ## Licencia y curso
