@@ -26,7 +26,9 @@ void write_producer_consumer(std::ostream& os) {
   const std::uint64_t addr = 0x8000;
 
   for (int round = 0; round < 32; ++round) {
-    os << t++ << " 0 W " << std::hex << "0x" << addr << std::dec << " 4\n";
+    // PE 0 writes an int value (round counter), PE 1 reads it back
+    os << t++ << " 0 W " << std::hex << "0x" << addr << std::dec
+       << " 4 " << round << "\n";
     os << t++ << " 1 R " << std::hex << "0x" << addr << std::dec << " 4\n";
   }
 }
@@ -43,14 +45,19 @@ void write_migratory(std::ostream& os) {
   const std::uint64_t addr = 0x9000;
 
   for (int lap = 0; lap < 24; ++lap) {
+    int val_base = lap * 4;
     os << t++ << " 0 R " << std::hex << "0x" << addr << std::dec << " 4\n";
-    os << t++ << " 0 W " << std::hex << "0x" << addr << std::dec << " 4\n";
+    os << t++ << " 0 W " << std::hex << "0x" << addr << std::dec
+       << " 4 " << (val_base + 0) << "\n";
     os << t++ << " 1 R " << std::hex << "0x" << addr << std::dec << " 4\n";
-    os << t++ << " 1 W " << std::hex << "0x" << addr << std::dec << " 4\n";
+    os << t++ << " 1 W " << std::hex << "0x" << addr << std::dec
+       << " 4 " << (val_base + 1) << "\n";
     os << t++ << " 2 R " << std::hex << "0x" << addr << std::dec << " 4\n";
-    os << t++ << " 2 W " << std::hex << "0x" << addr << std::dec << " 4\n";
+    os << t++ << " 2 W " << std::hex << "0x" << addr << std::dec
+       << " 4 " << (val_base + 2) << "\n";
     os << t++ << " 3 R " << std::hex << "0x" << addr << std::dec << " 4\n";
-    os << t++ << " 3 W " << std::hex << "0x" << addr << std::dec << " 4\n";
+    os << t++ << " 3 W " << std::hex << "0x" << addr << std::dec
+       << " 4 " << (val_base + 3) << "\n";
   }
 }
 

@@ -64,6 +64,51 @@ std::string trim(std::string s) {
   return s;
 }
 
+/**
+ * Infers the byte size of a token value.
+ *
+ * @param value_tok value token from the trace line
+ * @return inferred byte size, or 4 as fallback
+ */
+std::uint32_t infer_size_from_value(const std::string& value_tok) {
+  if (value_tok.empty()) return 4;
+
+  // For strings
+  if (value_tok.size() >= 2 && value_tok.front() == '"' && value_tok.back() == '"') {
+    return static_cast<std::uint32_t>(value_tok.size() - 2);  // strip surrounding quotes
+  }
+
+  // For chars
+  if (value_tok.size() >= 3 && value_tok.front() == '\'' && value_tok.back() == '\'') {
+    return 1;
+  }
+
+  // For integers
+  try {
+    std::size_t idx = 0;
+    unsigned long long v = std::stoull(value_tok, &idx, 0);
+    if (idx == value_tok.size()) {
+      if (v <= 0xFFULL)         return 1;
+      if (v <= 0xFFFFFFFFULL)   return 4;
+      return 8;
+    }
+  } catch (...) {}
+
+  // For signed integer
+  try {
+    std::size_t idx = 0;
+    long long v = std::stoll(value_tok, &idx, 0);
+    if (idx == value_tok.size()) {
+      if (v >= -128 && v <= 127)              return 1;
+      if (v >= -2147483648LL && v <= 2147483647LL) return 4;
+      return 8;
+    }
+  } catch (...) {}
+
+  // For others: Uses string logic
+  return static_cast<std::uint32_t>(value_tok.size());
+}
+
 }  // namespace
 
 /**
@@ -91,12 +136,43 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
     std::string pe_tok;
     std::string op_tok;
     std::string addr_tok;
-    std::string size_tok;
     if (!(iss >> tick_tok >> pe_tok >> op_tok >> addr_tok)) {
-      error_out = "line " + std::to_string(line_no) + ": expected: tick pe_id R|W address [size]";
+      error_out = "line " + std::to_string(line_no) + ": expected: tick pe_id R|W address [size] [value]";
       return false;
     }
-    (void)(iss >> size_tok);
+
+    // Read optional remaining tokens: could be just size, just value, or both
+    std::string tok5, tok6;
+    (void)(iss >> tok5);
+    (void)(iss >> tok6);
+
+    // Separate size_tok and value_tok from tok5/tok6.
+    std::string size_tok;
+    std::string value_tok;
+
+    auto is_plain_number = [](const std::string& t) -> bool {
+      if (t.empty()) return false;
+      if (t.front() == '"' || t.front() == '\'') return false;
+      try {
+        std::size_t idx = 0;
+        unsigned long long v = std::stoull(t, &idx, 0);
+        return idx == t.size() && v > 0;
+      } catch (...) { return false; }
+    };
+
+    if (!tok5.empty()) {
+      if (is_plain_number(tok5) && tok6.empty()) {
+        size_tok = tok5;
+      } else if (is_plain_number(tok5) && !tok6.empty()) {
+        size_tok  = tok5;
+        value_tok = tok6;
+      } else {
+        value_tok = tok5;
+        if (!tok6.empty()) {
+          // Ignore
+        }
+      }
+    }
 
     std::uint64_t tick = 0;
     if (!parse_uint64(tick_tok, 10, tick)) {
@@ -134,6 +210,7 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
       return false;
     }
 
+    // Uses explicit size or infers it.
     std::uint32_t size = 4;
     if (!size_tok.empty()) {
       std::uint64_t sz64 = 0;
@@ -142,9 +219,14 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
         return false;
       }
       size = static_cast<std::uint32_t>(sz64);
+    } else if (!value_tok.empty()) {
+      // Infer size from the value token
+      size = infer_size_from_value(value_tok);
+      // In case of bad infer
+      if (size == 0) size = 4;
     }
 
-    entries_.push_back(TraceEntry{tick, pe_id, op, address, size});
+    entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok});
   }
 
   std::sort(entries_.begin(), entries_.end(), [](const TraceEntry& a, const TraceEntry& b) {

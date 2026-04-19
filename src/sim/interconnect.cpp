@@ -1,64 +1,76 @@
-#include <tlm>
-
 #include "interconnect.hpp"
+#include "l1_cache.hpp"
 #include "monitor.hpp"
 
 namespace mp {
 
 /**
- * Registers four b_transport handlers on target sockets.
- *
- * @param name SystemC module name
- * @param monitor optional metrics sink
- * @param hop_latency fixed per-hop bus latency
+ * Constructor: initializes sockets and registers handlers.
  */
 Interconnect::Interconnect(sc_core::sc_module_name name, Monitor* monitor,
-                           const sc_core::sc_time& hop_latency)
+                           const sc_core::sc_time& latency)
     : sc_module(name),
-      tgt0("tgt0"),
-      tgt1("tgt1"),
-      tgt2("tgt2"),
-      tgt3("tgt3"),
+      tgt0("tgt0"), tgt1("tgt1"), tgt2("tgt2"), tgt3("tgt3"),
       mem_socket("mem_socket"),
       monitor_(monitor),
-      hop_latency_(hop_latency) {
+      latency_(latency) {
+
   tgt0.register_b_transport(this, &Interconnect::b_transport0);
   tgt1.register_b_transport(this, &Interconnect::b_transport1);
   tgt2.register_b_transport(this, &Interconnect::b_transport2);
   tgt3.register_b_transport(this, &Interconnect::b_transport3);
-}
 
-/** Forwards to forward() for input port 0. */
-void Interconnect::b_transport0(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-  forward(0, trans, delay);
-}
-
-/** Forwards to forward() for input port 1. */
-void Interconnect::b_transport1(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-  forward(1, trans, delay);
-}
-
-/** Forwards to forward() for input port 2. */
-void Interconnect::b_transport2(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-  forward(2, trans, delay);
-}
-
-/** Forwards to forward() for input port 3. */
-void Interconnect::b_transport3(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-  forward(3, trans, delay);
+  caches_.fill(nullptr);
 }
 
 /**
- * Adds hop_latency, calls memory, and records time delta and bytes on the monitor.
+ * Registers a cache for snooping.
  */
-void Interconnect::forward(int port_id, tlm::tlm_generic_payload& trans,
-                           sc_core::sc_time& delay) {
-  const sc_core::sc_time t0 = delay;
-  delay += hop_latency_;
-  mem_socket->b_transport(trans, delay);
-  if (monitor_) {
-    monitor_->record_bus_transaction(port_id, trans.get_data_length(), delay - t0);
+void Interconnect::register_cache(int id, L1Cache* cache) {
+  caches_[id] = cache;
+}
+
+/**
+ * Broadcasts a snoop to all caches except the requester.
+ */
+void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type) {
+  for (int i = 0; i < kPorts; ++i) {
+    if (i != requester && caches_[i]) {
+      caches_[i]->snoop(addr, type);
+    }
   }
 }
+
+/**
+ * Forwards a transaction to memory and records metrics on the Monitor.
+ */
+void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
+                           sc_core::sc_time& delay) {
+
+  const uint64_t addr = trans.get_address();
+
+  if (trans.is_write())
+    snoop_all(id, addr, BusTransaction::BusRdX);
+  else
+    snoop_all(id, addr, BusTransaction::BusRd);
+
+  const sc_core::sc_time t0 = delay;
+
+  delay += latency_;
+  mem_socket->b_transport(trans, delay);
+
+  if (monitor_) {
+    monitor_->record_bus_transaction(
+        id,
+        static_cast<uint64_t>(trans.get_data_length()),
+        delay - t0);
+  }
+}
+
+/** Port dispatchers */
+void Interconnect::b_transport0(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(0, t, d); }
+void Interconnect::b_transport1(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(1, t, d); }
+void Interconnect::b_transport2(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(2, t, d); }
+void Interconnect::b_transport3(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(3, t, d); }
 
 }  // namespace mp
