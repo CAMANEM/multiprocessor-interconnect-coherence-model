@@ -54,9 +54,10 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
   if (Log::enabled(LogLevel::Info)) {
     std::ostringstream os;
     os << "[IC] port=" << port_id << ' '
+     os << "[IC] port=" << id << ' '
        << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
        << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
-       << trans.get_data_length() << " hop=" << hop_latency_.to_string();
+       << trans.get_data_length() << " hop=" << latency_.to_string();
     Log::info(os.str());
   }
 
