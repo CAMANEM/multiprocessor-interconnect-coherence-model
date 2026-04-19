@@ -1,8 +1,45 @@
 #include "l1_cache.hpp"
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 
 namespace mp {
+
+namespace {
+
+/**
+ * Traduces the payload making it easy to validate.
+ *
+ * @param trans  TLM payload
+ * @return       Payload data formatted
+ */
+std::string format_payload(const tlm::tlm_generic_payload& trans) {
+  const unsigned char* ptr = trans.get_data_ptr();
+  const unsigned int   len = trans.get_data_length();
+
+  if (!ptr || len == 0) return "(no data)";
+
+  if (trans.is_read()) return "(read — data filled by memory)";
+
+  std::ostringstream oss;
+  oss << "[ ";
+  for (unsigned int i = 0; i < len; ++i) {
+    oss << "0x" << std::hex << std::setw(2) << std::setfill('0')
+        << static_cast<unsigned int>(ptr[i]) << " ";
+  }
+  oss << "]";
+
+  if (len == 1 || len == 2 || len == 4 || len == 8) {
+    std::uint64_t v = 0;
+    for (unsigned int i = 0; i < len; ++i) {
+      v |= static_cast<std::uint64_t>(ptr[i]) << (8 * i);
+    }
+    oss << std::dec << " (=" << v << " / 0x" << std::hex << v << ")";
+  }
+  return oss.str();
+}
+
+}  // namespace
 
 /**
  * Constructor: initializes sockets and registers TLM callback.
@@ -47,6 +84,7 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
       std::cout << "[L1 " << id_ << "] HIT   "
                 << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
                 << std::dec << "  state=" << (line.state == CacheState::M ? "M" : "S")
+                << "  data=" << format_payload(trans)
                 << " -> served locally\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);  // ← HIT: respuesta OK manual
@@ -57,7 +95,9 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
       // Write hit in Modified — already exclusive, no bus traffic
       std::cout << "[L1 " << id_ << "] HIT   "
                 << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
-                << std::dec << "  state=M -> served locally\n";
+                << std::dec << "  state=M"
+                << "  data=" << format_payload(trans)
+                << " -> served locally\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);  // ← HIT: respuesta OK manual
       return;
@@ -67,8 +107,9 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
       // Upgrade: S -> M — need exclusive ownership, generates BusRdX
       std::cout << "[L1 " << id_ << "] UPGRD "
                 << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
-                << std::dec << "  S->M (BusRdX)\n";
-      mem_socket->b_transport(trans, delay);  // ← va al bus, response se setea en memoria
+                << std::dec << "  S->M (BusRdX)"
+                << "  data=" << format_payload(trans) << "\n";
+      mem_socket->b_transport(trans, delay);
       line.state = CacheState::M;
       delay += latency_;
       return;
@@ -82,7 +123,8 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
   std::cout << "[L1 " << id_ << "] MISS  "
             << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
             << std::dec << "  I->" << new_state_str
-            << (is_write ? " (BusRdX -> mem)" : " (BusRd  -> mem)") << "\n";
+            << (is_write ? " (BusRdX -> mem)" : " (BusRd  -> mem)")
+            << "  data=" << format_payload(trans) << "\n";
 
   mem_socket->b_transport(trans, delay);  // ← va al bus, response se setea en memoria
   lines_[addr].state = new_state;

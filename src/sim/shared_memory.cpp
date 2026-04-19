@@ -1,6 +1,7 @@
 #include "shared_memory.hpp"
 
 #include <cstring>
+#include <sstream>
 #include <iomanip>
 #include <iostream>
 
@@ -21,9 +22,40 @@ SharedMemory::SharedMemory(sc_core::sc_module_name name, const sc_core::sc_time&
   socket.register_b_transport(this, &SharedMemory::b_transport);
 }
 
+namespace {
+
+/**
+ * Formats a buffer to show a understandable value
+ *
+ * @param ptr   pointer to the data bytes
+ * @param len   bytes to format
+ * @return      formatted string
+ */
+std::string format_data(const unsigned char* ptr, unsigned int len) {
+  std::ostringstream oss;
+  oss << "[ ";
+  for (unsigned int i = 0; i < len; ++i) {
+    oss << "0x" << std::hex << std::setw(2) << std::setfill('0')
+        << static_cast<unsigned int>(ptr[i]) << " ";
+  }
+  oss << "]";
+
+  if (len == 1 || len == 2 || len == 4 || len == 8) {
+    std::uint64_t v = 0;
+    for (unsigned int i = 0; i < len; ++i) {
+      v |= static_cast<std::uint64_t>(ptr[i]) << (8 * i);
+    }
+    oss << std::dec << " (=" << v << " / 0x" << std::hex << v << ")";
+  }
+
+  return oss.str();
+}
+
+}  // anonymous namespace
+
 /**
  * Performs read or write on mem_ with bounds check, delay accounting,
- * and console logging of the data bytes involved.
+ * and console logging of the data bytes and their interpreted value.
  */
 void SharedMemory::b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
   tlm::tlm_command  cmd  = trans.get_command();
@@ -43,26 +75,22 @@ void SharedMemory::b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time
     mem_delay = read_latency_;
     std::memcpy(ptr, mem_.data() + addr, len);
 
-    std::cout << "[MEM] READ  addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
+    std::cout << "[MEM @" << sc_core::sc_time_stamp().to_string() << "]"
+              << " READ  addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
               << std::dec << std::setfill(' ')
-              << "  len=" << len << "  data=[ ";
-    for (unsigned int i = 0; i < len; ++i) {
-      std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<unsigned int>(ptr[i]) << " ";
-    }
-    std::cout << std::dec << std::setfill(' ') << "]  lat=" << mem_delay.to_string() << "\n";
+              << "  len=" << len
+              << "  data=" << format_data(ptr, len)
+              << "  lat=" << mem_delay.to_string() << "\n";
 
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     mem_delay = write_latency_;
 
-    std::cout << "[MEM] WRITE addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
+    std::cout << "[MEM @" << sc_core::sc_time_stamp().to_string() << "]"
+              << " WRITE addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
               << std::dec << std::setfill(' ')
-              << "  len=" << len << "  data=[ ";
-    for (unsigned int i = 0; i < len; ++i) {
-      std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<unsigned int>(ptr[i]) << " ";
-    }
-    std::cout << std::dec << std::setfill(' ') << "]  lat=" << mem_delay.to_string() << "\n";
+              << "  len=" << len
+              << "  data=" << format_data(ptr, len)
+              << "  lat=" << mem_delay.to_string() << "\n";
 
     std::memcpy(mem_.data() + addr, ptr, len);
 

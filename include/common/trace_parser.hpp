@@ -16,6 +16,7 @@ struct TraceEntry {
   MemoryOperation op;
   std::uint64_t address;
   std::uint32_t size;
+  std::string value;
 };
 
 /**

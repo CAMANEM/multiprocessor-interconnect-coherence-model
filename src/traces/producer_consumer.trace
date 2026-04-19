@@ -1,10 +1,10 @@
 # CE4302 trace v1 (checked-in example; regenerate with tools/tracegen)
 # Workload: producer-consumer on shared line 0x8000
-0 0 W 0x8000 4
+0 0 W 0x8000 4 45
 1 1 R 0x8000 4
-2 0 W 0x8000 4
+2 0 W 0x8000 4 80
 3 1 R 0x8000 4
-4 0 W 0x8000 4
+4 0 W 0x8000 47
 5 1 R 0x8000 4
-6 0 W 0x8000 4
+6 0 W 0x8000 4 20
 7 1 R 0x8000 4
