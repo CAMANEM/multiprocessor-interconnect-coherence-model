@@ -131,6 +131,10 @@ Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 - Ramas cortas por entrega: `demo/tracegen`, `feature/l1-msi`, etc.
 - Objetivo Demo 2: generadores de trazas funcionales, diseño de L1 y tabla de transacciones TLM — usar issues o comentarios en PR para enlazar decisiones con el documento del curso.
 
+## Arquitectura almacenamiento memoria
+
+- Se está utilizando arquitectura Little Endian para almacenar la infomacion en las direcciones de memoria tanto de la compartida como la caché.
+
 ## Próximos pasos sugeridos (no implementados aún)
 
 - Tabla y justificación de **transacciones de coherencia** (p. ej. `GetS`, `GetM`, `Inv`, `WB`) sobre TLM.
