@@ -12,41 +12,39 @@ namespace mp {
 
 namespace {
 
-/**
- * Traduces the payload making it easy to validate.
- *
- * @param trans  TLM payload
- * @return       Payload data formatted
- */
-std::string format_payload(const tlm::tlm_generic_payload& trans) {
-  const unsigned char* ptr = trans.get_data_ptr();
-  const unsigned int   len = trans.get_data_length();
-
-  if (!ptr || len == 0) return "(no data)";
-
-  std::ostringstream oss;
-  oss << "[ ";
-  for (unsigned int i = 0; i < len; ++i) {
-    oss << "0x" << std::hex << std::setw(2) << std::setfill('0')
-        << static_cast<unsigned int>(ptr[i]) << " ";
-  }
-  oss << "]";
-
+// Convierte bytes (little-endian) a string con decimal y hex
+std::string format_value(const unsigned char* ptr, unsigned int len) {
+  if (!ptr || len == 0) return "(sin datos)";
   if (len == 1 || len == 2 || len == 4 || len == 8) {
     std::uint64_t v = 0;
-    for (unsigned int i = 0; i < len; ++i) {
+    for (unsigned int i = 0; i < len; ++i)
       v |= static_cast<std::uint64_t>(ptr[i]) << (8 * i);
-    }
-    oss << std::dec << " (=" << v << " / 0x" << std::hex << v << ")";
+    std::ostringstream oss;
+    oss << v << " (0x" << std::hex << v << ")";
+    return oss.str();
   }
+  std::ostringstream oss;
+  oss << "[ ";
+  for (unsigned int i = 0; i < len; ++i)
+    oss << "0x" << std::hex << std::setw(2) << std::setfill('0')
+        << static_cast<unsigned int>(ptr[i]) << " ";
+  oss << "]";
   return oss.str();
+}
+
+std::string format_payload(const tlm::tlm_generic_payload& trans) {
+  return format_value(trans.get_data_ptr(), trans.get_data_length());
+}
+
+std::string sim_time() {
+  return sc_core::sc_time_stamp().to_string();
 }
 
 }  // namespace
 
-/**
- * Constructor: initializes sockets and registers TLM callback.
- */
+// ---------------------------------------------------------------
+//  Constructor
+// ---------------------------------------------------------------
 L1Cache::L1Cache(sc_core::sc_module_name name, int id, Monitor* monitor,
                  CoherenceProtocolKind protocol, const sc_core::sc_time& latency)
     : sc_module(name),
@@ -56,106 +54,85 @@ L1Cache::L1Cache(sc_core::sc_module_name name, int id, Monitor* monitor,
       monitor_(monitor),
       protocol_(protocol),
       latency_(latency) {
-
   cpu_socket.register_b_transport(this, &L1Cache::b_transport_cpu);
 }
 
-/**
- * Align address to cache line boundary.
- */
+// ---------------------------------------------------------------
+//  Utilidades internas (logica sin cambios)
+// ---------------------------------------------------------------
 uint64_t L1Cache::align_down(uint64_t addr) {
   return addr - (addr % kLineSize);
 }
 
-bool L1Cache::payload_fits_line(uint64_t line_addr, const tlm::tlm_generic_payload& trans) const {
+bool L1Cache::payload_fits_line(uint64_t line_addr,
+                                const tlm::tlm_generic_payload& trans) const {
   const uint64_t addr = trans.get_address();
-  const uint64_t len = trans.get_data_length();
-  if (len == 0) {
-    return true;
-  }
-  if (addr < line_addr) {
-    return false;
-  }
+  const uint64_t len  = trans.get_data_length();
+  if (len == 0) return true;
+  if (addr < line_addr) return false;
   return ((addr - line_addr) + len) <= kLineSize;
 }
 
 void L1Cache::read_from_line(uint64_t line_addr, const CacheLine& line,
                              tlm::tlm_generic_payload& trans) const {
-  unsigned char* ptr = trans.get_data_ptr();
+  unsigned char*     ptr = trans.get_data_ptr();
   const unsigned int len = trans.get_data_length();
-  if (!ptr || len == 0) {
-    return;
-  }
+  if (!ptr || len == 0) return;
   if (!payload_fits_line(line_addr, trans)) {
     trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
     return;
   }
-  const std::size_t offset = static_cast<std::size_t>(trans.get_address() - line_addr);
+  const std::size_t offset =
+      static_cast<std::size_t>(trans.get_address() - line_addr);
   std::memcpy(ptr, line.data.data() + offset, len);
 }
 
 void L1Cache::write_to_line(uint64_t line_addr, CacheLine& line,
                             const tlm::tlm_generic_payload& trans) {
   const unsigned char* ptr = trans.get_data_ptr();
-  const unsigned int len = trans.get_data_length();
-  if (!ptr || len == 0) {
-    return;
-  }
-  if (!payload_fits_line(line_addr, trans)) {
-    return;
-  }
-  const std::size_t offset = static_cast<std::size_t>(trans.get_address() - line_addr);
+  const unsigned int   len = trans.get_data_length();
+  if (!ptr || len == 0) return;
+  if (!payload_fits_line(line_addr, trans)) return;
+  const std::size_t offset =
+      static_cast<std::size_t>(trans.get_address() - line_addr);
   std::memcpy(line.data.data() + offset, ptr, len);
 }
 
 void L1Cache::apply_bus_update(uint64_t line_addr, CacheLine& line,
                                const tlm::tlm_generic_payload& trans) {
-  if (!trans.is_write()) {
-    return;
-  }
+  if (!trans.is_write()) return;
   write_to_line(line_addr, line, trans);
 }
 
 const char* L1Cache::cache_state_name(CacheState state) {
   switch (state) {
-    case CacheState::I:
-      return "I";
-    case CacheState::S:
-      return "S";
-    case CacheState::M:
-      return "M";
+    case CacheState::I: return "I";
+    case CacheState::S: return "S";
+    case CacheState::M: return "M";
   }
   return "?";
 }
 
-void L1Cache::set_line_state(uint64_t addr, CacheLine& line, CacheState next_state) {
-  if (line.state == next_state) {
-    return;
-  }
-
+void L1Cache::set_line_state(uint64_t addr, CacheLine& line,
+                             CacheState next_state) {
+  if (line.state == next_state) return;
   const CacheState old_state = line.state;
   line.state = next_state;
-
-  if (!monitor_) {
-    return;
-  }
-
+  if (!monitor_) return;
   auto to_label = [](CacheState s) {
     switch (s) {
-      case CacheState::I:
-        return CacheStateLabel::Invalid;
-      case CacheState::S:
-        return CacheStateLabel::Shared;
-      case CacheState::M:
-        return CacheStateLabel::Modified;
+      case CacheState::I: return CacheStateLabel::Invalid;
+      case CacheState::S: return CacheStateLabel::Shared;
+      case CacheState::M: return CacheStateLabel::Modified;
     }
     return CacheStateLabel::Invalid;
   };
-
-  monitor_->on_cache_state_change(id_, addr, to_label(old_state), to_label(next_state));
+  monitor_->on_cache_state_change(id_, addr, to_label(old_state),
+                                  to_label(next_state));
 }
 
-void L1Cache::emit_bus_transaction(BusTransaction txn, tlm::tlm_generic_payload& trans,
+void L1Cache::emit_bus_transaction(BusTransaction txn,
+                                   tlm::tlm_generic_payload& trans,
                                    sc_core::sc_time& delay) {
   CoherenceHintExtension hint(txn);
   trans.set_extension(&hint);
@@ -163,12 +140,13 @@ void L1Cache::emit_bus_transaction(BusTransaction txn, tlm::tlm_generic_payload&
   trans.clear_extension(&hint);
 }
 
-/**
- * Main cache access handler.
- */
-void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-  const uint64_t addr = align_down(trans.get_address());
-  const bool is_write = trans.is_write();
+// ---------------------------------------------------------------
+//  Entrada principal del CPU
+// ---------------------------------------------------------------
+void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans,
+                               sc_core::sc_time& delay) {
+  const uint64_t addr     = align_down(trans.get_address());
+  const bool     is_write = trans.is_write();
 
   if (!payload_fits_line(addr, trans)) {
     trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
@@ -185,44 +163,65 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time&
   }
 }
 
-void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write, tlm::tlm_generic_payload& trans,
-                             sc_core::sc_time& delay) {
-  const char* op = is_write ? "W" : "R";
-
-  auto it = lines_.find(addr);
-  const bool hit = (it != lines_.end() && it->second.state != CacheState::I);
+// ---------------------------------------------------------------
+//  MSI -- logica CPU
+//
+//  Protocolo write-invalidate:
+//    Lectura en I   -> BusRd  -> estado S (compartido con otros)
+//    Escritura en I  -> BusRdX -> estado M (exclusivo, invalida otros)
+//    Escritura en S  -> BusRdX (upgrade) -> invalida otros -> estado M
+//    Escritura en M  -> local sin bus (ya somos exclusivos)
+// ---------------------------------------------------------------
+void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
+                              tlm::tlm_generic_payload& trans,
+                              sc_core::sc_time& delay) {
+  auto       it  = lines_.find(addr);
+  const bool hit = (it != lines_.end() &&
+                    it->second.state != CacheState::I);
 
   if (hit) {
     CacheLine& line = it->second;
 
+    // HIT lectura: linea en S o M -> servir localmente
     if (!is_write) {
       read_from_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] HIT   " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  state=" << cache_state_name(line.state)
-                << "  data=" << format_payload(trans) << " -> served locally\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "HIT LECTURA   addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  estado=" << cache_state_name(line.state)
+          << "  valor=" << format_payload(trans)
+          << "  (servido desde cache local, sin bus)\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
       return;
     }
 
+    // HIT escritura en M: ya tenemos exclusividad
     if (line.state == CacheState::M) {
       write_to_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] HIT   " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  state=M"
-                << "  data=" << format_payload(trans) << " -> served locally\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "HIT ESCRITURA addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  estado=M (exclusivo)  valor=" << format_payload(trans)
+          << "  (sin bus, ya somos duenos)\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
       return;
     }
 
+    // UPGRADE S->M: copia compartida pero necesitamos exclusividad.
+    // Write-invalidate: emite BusRdX -> todos los demas invalidan su copia.
     if (line.state == CacheState::S) {
       write_to_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] UPGRD " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  S->M (BusRdX)"
-                << "  data=" << format_payload(trans) << "\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "UPGRADE S->M  addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  valor a escribir=" << format_payload(trans) << "\n"
+          << "               Razon : linea compartida (S), escritura requiere exclusividad\n"
+          << "               Accion: BusRdX -> invalida copias en todos los demas caches\n";
       emit_bus_transaction(BusTransaction::BusRdX, trans, delay);
       set_line_state(addr, line, CacheState::M);
       delay += latency_;
@@ -230,108 +229,143 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write, tlm::tlm_generic_payl
     }
   }
 
-  if (Log::enabled(LogLevel::Debug)) {
-    std::ostringstream os;
-    os << "[L1_" << id_ << "] passthrough line=0x" << std::hex << addr << std::dec
-       << " cmd=" << (trans.get_command() == tlm::TLM_READ_COMMAND ? "R" : "W")
-       << " proto=MSI";
-    Log::debug(os.str());
-  }
-
+  // MISS: linea en estado I (no esta en cache)
   delay += latency_;
-  const BusTransaction bus_txn = is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
-  const CacheState new_state = is_write ? CacheState::M : CacheState::S;
+  const BusTransaction bus_txn =
+      is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
+  const CacheState new_state =
+      is_write ? CacheState::M : CacheState::S;
 
-  std::cout << "[L1 " << id_ << "] MISS  "
-            << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
-            << std::dec << "  I->" << cache_state_name(new_state)
-            << (is_write ? " (BusRdX -> mem)" : " (BusRd  -> mem)")
-            << "  data=" << format_payload(trans) << "\n";
+  std::cout
+      << "[t=" << sim_time() << "][L1-" << id_ << "] "
+      << "MISS " << (is_write ? "ESCRITURA" : "LECTURA  ")
+      << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
+      << std::dec << "  I->" << cache_state_name(new_state) << "\n"
+      << "               Razon : linea no esta en cache (Invalid)\n"
+      << "               Accion: " << (is_write ? "BusRdX" : "BusRd ")
+      << " -> busca datos en memoria principal\n";
 
   emit_bus_transaction(bus_txn, trans, delay);
+
   CacheLine& line = lines_[addr];
   set_line_state(addr, line, new_state);
   write_to_line(addr, line, trans);
+
+  std::cout
+      << "               Resultado: memoria respondio valor="
+      << format_payload(trans)
+      << "  nuevo estado=" << cache_state_name(new_state) << "\n";
+
   delay += latency_;
 }
 
+// ---------------------------------------------------------------
+//  Firefly -- logica CPU
+//
+//  Protocolo write-update (hibrido con MSI en miss):
+//    Lectura en I   -> BusRd  -> estado S  (igual que MSI)
+//    Escritura en I  -> BusRdX -> estado M  (igual que MSI)
+//    Escritura en S  -> BusUpd -> difunde el nuevo valor a todos
+//                        los caches con copia en S. TODOS quedan
+//                        actualizados. El escritor permanece en S.
+//    Escritura en M  -> local sin bus
+// ---------------------------------------------------------------
 void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
-                                 tlm::tlm_generic_payload& trans,
-                                 sc_core::sc_time& delay) {
-  const char* op = is_write ? "W" : "R";
-
-  auto it = lines_.find(addr);
-  const bool hit = (it != lines_.end() && it->second.state != CacheState::I);
+                                  tlm::tlm_generic_payload& trans,
+                                  sc_core::sc_time& delay) {
+  auto       it  = lines_.find(addr);
+  const bool hit = (it != lines_.end() &&
+                    it->second.state != CacheState::I);
 
   if (hit) {
     CacheLine& line = it->second;
 
+    // HIT lectura
     if (!is_write) {
       read_from_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] HIT   " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  state=" << cache_state_name(line.state)
-                << "  data=" << format_payload(trans) << " -> served locally\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "HIT LECTURA   addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  estado=" << cache_state_name(line.state)
+          << "  valor=" << format_payload(trans)
+          << "  (servido desde cache local, sin bus)\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
       return;
     }
 
+    // HIT escritura en M
     if (line.state == CacheState::M) {
       write_to_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] HIT   " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  state=M"
-                << "  data=" << format_payload(trans) << " -> served locally\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "HIT ESCRITURA addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  estado=M (exclusivo)  valor=" << format_payload(trans)
+          << "  (sin bus)\n";
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
       return;
     }
 
+    // Escritura en S: write-update.
+    // Firefly NO invalida los otros caches. En su lugar emite BusUpd
+    // con el nuevo valor. Cada cache que tiene la linea en S recibe
+    // el dato y lo aplica. Todos quedan consistentes sin necesidad
+    // de volver a buscarlo en memoria.
     if (line.state == CacheState::S) {
       write_to_line(addr, line, trans);
-      std::cout << "[L1 " << id_ << "] UPD   " << op << " addr=0x" << std::hex
-                << std::setw(8) << std::setfill('0') << addr << std::dec
-                << "  S->S (BusUpd)"
-                << "  data=" << format_payload(trans) << "\n";
+      std::cout
+          << "[t=" << sim_time() << "][L1-" << id_ << "] "
+          << "ACTUALIZACION S->S addr=0x" << std::hex << std::setw(8)
+          << std::setfill('0') << addr << std::dec
+          << "  valor difundido=" << format_payload(trans) << "\n"
+          << "               Razon : Firefly es write-update; no invalida\n"
+          << "               Accion: BusUpd -> todos los caches con copia S\n"
+          << "                       reciben el dato nuevo y lo aplican localmente\n";
       emit_bus_transaction(BusTransaction::BusUpd, trans, delay);
       delay += latency_;
       return;
     }
   }
 
-  if (Log::enabled(LogLevel::Debug)) {
-    std::ostringstream os;
-    os << "[L1_" << id_ << "] passthrough line=0x" << std::hex << addr << std::dec
-       << " cmd=" << (trans.get_command() == tlm::TLM_READ_COMMAND ? "R" : "W")
-       << " proto=Firefly";
-    Log::debug(os.str());
-  }
-
+  // MISS: igual que MSI
   delay += latency_;
-  const BusTransaction bus_txn = is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
-  const CacheState new_state = is_write ? CacheState::M : CacheState::S;
+  const BusTransaction bus_txn =
+      is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
+  const CacheState new_state =
+      is_write ? CacheState::M : CacheState::S;
 
-  std::cout << "[L1 " << id_ << "] MISS  "
-            << op << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
-            << std::dec << "  I->" << cache_state_name(new_state)
-            << (is_write ? " (BusRdX -> mem)" : " (BusRd  -> mem)")
-            << "  data=" << format_payload(trans) << "\n";
+  std::cout
+      << "[t=" << sim_time() << "][L1-" << id_ << "] "
+      << "MISS " << (is_write ? "ESCRITURA" : "LECTURA  ")
+      << " addr=0x" << std::hex << std::setw(8) << std::setfill('0') << addr
+      << std::dec << "  I->" << cache_state_name(new_state) << "\n"
+      << "               Razon : linea no esta en cache (Invalid)\n"
+      << "               Accion: " << (is_write ? "BusRdX" : "BusRd ")
+      << " -> busca datos en memoria principal\n";
 
   emit_bus_transaction(bus_txn, trans, delay);
+
   CacheLine& line = lines_[addr];
   set_line_state(addr, line, new_state);
   write_to_line(addr, line, trans);
+
+  std::cout
+      << "               Resultado: memoria respondio valor="
+      << format_payload(trans)
+      << "  nuevo estado=" << cache_state_name(new_state) << "\n";
+
   delay += latency_;
 }
 
-/**
- * Snooping handler — reacts to other caches' bus transactions.
- */
+// ---------------------------------------------------------------
+//  Snooping -- reaccion a transacciones de otros caches en el bus
+// ---------------------------------------------------------------
 void L1Cache::snoop(uint64_t addr, BusTransaction type,
                     const tlm::tlm_generic_payload* trans) {
   const uint64_t line_addr = align_down(addr);
-
   switch (protocol_) {
     case CoherenceProtocolKind::Msi:
       snoop_msi(line_addr, type, trans);
@@ -342,78 +376,99 @@ void L1Cache::snoop(uint64_t addr, BusTransaction type,
   }
 }
 
+// MSI snooping (write-invalidate):
+//   Ve BusRd  -> si tenemos M, bajar a S (otro necesita leer)
+//   Ve BusRdX -> si tenemos S o M, invalidar (otro necesita escribir)
+//   Ve BusUpd -> ignorado (MSI no usa actualizaciones)
 void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
                         const tlm::tlm_generic_payload* trans) {
   (void)trans;
   auto it = lines_.find(addr);
-  if (it == lines_.end()) {
-    return;
-  }
+  if (it == lines_.end()) return;
 
   CacheLine& line = it->second;
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
-        std::cout << "[L1 " << id_ << "] SNOOP BusRd  addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  M->S (downgrade)\n";
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  M->S  (otro cache pidio la linea; exclusividad quitada)\n";
         set_line_state(addr, line, CacheState::S);
       }
       break;
     case BusTransaction::BusRdX:
       if (line.state == CacheState::S || line.state == CacheState::M) {
-        std::cout << "[L1 " << id_ << "] SNOOP BusRdX addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  " << cache_state_name(line.state) << "->I (invalidate)\n";
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusRdX  addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  " << cache_state_name(line.state)
+            << "->I  (otro cache pide exclusividad; se invalida la copia)\n";
         set_line_state(addr, line, CacheState::I);
       }
       break;
     case BusTransaction::BusUpd:
-      // MSI does not define BusUpd; ignore when present.
+      // MSI no define BusUpd; ignorado
       break;
   }
 }
 
+// Firefly snooping (write-update):
+//   Ve BusRd  -> si tenemos M, bajar a S
+//   Ve BusRdX -> si tenemos S o M, invalidar
+//   Ve BusUpd -> si tenemos S o M, APLICAR el nuevo dato al buffer local
+//                sin ir a memoria (este es el beneficio del write-update)
 void L1Cache::snoop_firefly(uint64_t addr, BusTransaction type,
-                            const tlm::tlm_generic_payload* trans) {
+                             const tlm::tlm_generic_payload* trans) {
   auto it = lines_.find(addr);
-  if (it == lines_.end()) {
-    return;
-  }
+  if (it == lines_.end()) return;
 
   CacheLine& line = it->second;
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
-        std::cout << "[L1 " << id_ << "] SNOOP BusRd  addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  M->S (share)\n";
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  M->S  (otro cache pidio la linea; valor compartido)\n";
         set_line_state(addr, line, CacheState::S);
       }
       break;
     case BusTransaction::BusRdX:
       if (line.state == CacheState::S || line.state == CacheState::M) {
-        std::cout << "[L1 " << id_ << "] SNOOP BusRdX addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  " << cache_state_name(line.state) << "->I (invalidate)\n";
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusRdX  addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  " << cache_state_name(line.state)
+            << "->I  (otro cache pide exclusividad; se invalida la copia)\n";
         set_line_state(addr, line, CacheState::I);
       }
       break;
     case BusTransaction::BusUpd:
       if (line.state == CacheState::S) {
-        if (trans) {
-          apply_bus_update(addr, line, *trans);
-        }
-        std::cout << "[L1 " << id_ << "] SNOOP BusUpd addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  S->S (observe update + data apply)\n";
+        if (trans) apply_bus_update(addr, line, *trans);
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusUpd  addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  S->S  valor actualizado en cache="
+            << format_value(line.data.data(),
+                            static_cast<unsigned>(trans ? trans->get_data_length() : 4))
+            << "  (dato recibido y aplicado; no es necesario ir a memoria)\n";
       } else if (line.state == CacheState::M) {
-        if (trans) {
-          apply_bus_update(addr, line, *trans);
-        }
-        std::cout << "[L1 " << id_ << "] SNOOP BusUpd addr=0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << addr << std::dec
-                  << "  M->S (reconcile + data apply)\n";
+        if (trans) apply_bus_update(addr, line, *trans);
+        std::cout
+            << "[t=" << sim_time() << "][L1-" << id_ << "] "
+            << "SNOOP BusUpd  addr=0x" << std::hex << std::setw(8)
+            << std::setfill('0') << addr << std::dec
+            << "  M->S  valor actualizado en cache="
+            << format_value(line.data.data(),
+                            static_cast<unsigned>(trans ? trans->get_data_length() : 4))
+            << "  (otro cache actualizo; se baja a S y aplicamos dato)\n";
         set_line_state(addr, line, CacheState::S);
       }
       break;
