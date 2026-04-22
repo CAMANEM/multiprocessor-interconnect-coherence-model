@@ -165,12 +165,6 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans,
 
 // ---------------------------------------------------------------
 //  MSI -- logica CPU
-//
-//  Protocolo write-invalidate:
-//    Lectura en I   -> BusRd  -> estado S (compartido con otros)
-//    Escritura en I  -> BusRdX -> estado M (exclusivo, invalida otros)
-//    Escritura en S  -> BusRdX (upgrade) -> invalida otros -> estado M
-//    Escritura en M  -> local sin bus (ya somos exclusivos)
 // ---------------------------------------------------------------
 void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
                               tlm::tlm_generic_payload& trans,
@@ -182,7 +176,6 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
   if (hit) {
     CacheLine& line = it->second;
 
-    // HIT lectura: linea en S o M -> servir localmente
     if (!is_write) {
       read_from_line(addr, line, trans);
       std::cout
@@ -197,7 +190,6 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       return;
     }
 
-    // HIT escritura en M: ya tenemos exclusividad
     if (line.state == CacheState::M) {
       write_to_line(addr, line, trans);
       std::cout
@@ -211,8 +203,6 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       return;
     }
 
-    // UPGRADE S->M: copia compartida pero necesitamos exclusividad.
-    // Write-invalidate: emite BusRdX -> todos los demas invalidan su copia.
     if (line.state == CacheState::S) {
       write_to_line(addr, line, trans);
       std::cout
@@ -229,7 +219,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
     }
   }
 
-  // MISS: linea en estado I (no esta en cache)
+  // MISS
   delay += latency_;
   const BusTransaction bus_txn =
       is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
@@ -261,14 +251,6 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
 
 // ---------------------------------------------------------------
 //  Firefly -- logica CPU
-//
-//  Protocolo write-update (hibrido con MSI en miss):
-//    Lectura en I   -> BusRd  -> estado S  (igual que MSI)
-//    Escritura en I  -> BusRdX -> estado M  (igual que MSI)
-//    Escritura en S  -> BusUpd -> difunde el nuevo valor a todos
-//                        los caches con copia en S. TODOS quedan
-//                        actualizados. El escritor permanece en S.
-//    Escritura en M  -> local sin bus
 // ---------------------------------------------------------------
 void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
                                   tlm::tlm_generic_payload& trans,
@@ -280,7 +262,6 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
   if (hit) {
     CacheLine& line = it->second;
 
-    // HIT lectura
     if (!is_write) {
       read_from_line(addr, line, trans);
       std::cout
@@ -295,7 +276,6 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       return;
     }
 
-    // HIT escritura en M
     if (line.state == CacheState::M) {
       write_to_line(addr, line, trans);
       std::cout
@@ -309,11 +289,6 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       return;
     }
 
-    // Escritura en S: write-update.
-    // Firefly NO invalida los otros caches. En su lugar emite BusUpd
-    // con el nuevo valor. Cada cache que tiene la linea en S recibe
-    // el dato y lo aplica. Todos quedan consistentes sin necesidad
-    // de volver a buscarlo en memoria.
     if (line.state == CacheState::S) {
       write_to_line(addr, line, trans);
       std::cout
@@ -330,7 +305,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
     }
   }
 
-  // MISS: igual que MSI
+  // MISS
   delay += latency_;
   const BusTransaction bus_txn =
       is_write ? BusTransaction::BusRdX : BusTransaction::BusRd;
@@ -376,13 +351,11 @@ void L1Cache::snoop(uint64_t addr, BusTransaction type,
   }
 }
 
-// MSI snooping (write-invalidate):
-//   Ve BusRd  -> si tenemos M, bajar a S (otro necesita leer)
-//   Ve BusRdX -> si tenemos S o M, invalidar (otro necesita escribir)
-//   Ve BusUpd -> ignorado (MSI no usa actualizaciones)
+// ---------------------------------------------------------------
+//  MSI snooping
+// ---------------------------------------------------------------
 void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
                         const tlm::tlm_generic_payload* trans) {
-  (void)trans;
   auto it = lines_.find(addr);
   if (it == lines_.end()) return;
 
@@ -390,6 +363,21 @@ void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
+        // -------------------------------------------------------
+        // FIX: cache-to-cache transfer.
+        // Este cache tiene el dato modificado. Lo copia al payload
+        // del trans ANTES de que memoria responda, para que el
+        // requestor reciba el valor correcto (no el stale de mem).
+        // -------------------------------------------------------
+        if (trans && trans->get_data_ptr() && trans->get_data_length() > 0) {
+          const std::size_t offset =
+              static_cast<std::size_t>(trans->get_address() - addr);
+          const std::size_t len = trans->get_data_length();
+          if (offset + len <= kLineSize) {
+            std::memcpy(trans->get_data_ptr(),
+                        line.data.data() + offset, len);
+          }
+        }
         std::cout
             << "[t=" << sim_time() << "][L1-" << id_ << "] "
             << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)
@@ -415,11 +403,9 @@ void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
   }
 }
 
-// Firefly snooping (write-update):
-//   Ve BusRd  -> si tenemos M, bajar a S
-//   Ve BusRdX -> si tenemos S o M, invalidar
-//   Ve BusUpd -> si tenemos S o M, APLICAR el nuevo dato al buffer local
-//                sin ir a memoria (este es el beneficio del write-update)
+// ---------------------------------------------------------------
+//  Firefly snooping
+// ---------------------------------------------------------------
 void L1Cache::snoop_firefly(uint64_t addr, BusTransaction type,
                              const tlm::tlm_generic_payload* trans) {
   auto it = lines_.find(addr);
@@ -429,6 +415,22 @@ void L1Cache::snoop_firefly(uint64_t addr, BusTransaction type,
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
+        // -------------------------------------------------------
+        // FIX: cache-to-cache transfer.
+        // Igual que MSI: este cache tiene el dato en M (modificado
+        // y no escrito en memoria todavia). Lo provee al requestor
+        // copiandolo en el buffer del trans antes de que memoria
+        // responda. Sin este paso, memoria devolveria el valor stale.
+        // -------------------------------------------------------
+        if (trans && trans->get_data_ptr() && trans->get_data_length() > 0) {
+          const std::size_t offset =
+              static_cast<std::size_t>(trans->get_address() - addr);
+          const std::size_t len = trans->get_data_length();
+          if (offset + len <= kLineSize) {
+            std::memcpy(trans->get_data_ptr(),
+                        line.data.data() + offset, len);
+          }
+        }
         std::cout
             << "[t=" << sim_time() << "][L1-" << id_ << "] "
             << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)

@@ -1,5 +1,7 @@
+#include <cstring>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 #include <tlm>
 #include "log.hpp"
 #include "interconnect.hpp"
@@ -84,12 +86,45 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
   }
 
   const uint64_t addr = trans.get_address();
+
+  std::vector<unsigned char> pre_snoop_buf;
+  if (bus_txn == BusTransaction::BusRd &&
+      trans.get_data_ptr() && trans.get_data_length() > 0) {
+    pre_snoop_buf.assign(trans.get_data_ptr(),
+                         trans.get_data_ptr() + trans.get_data_length());
+  }
+
   snoop_all(id, addr, bus_txn, &trans);
 
-  const sc_core::sc_time t0 = delay;
+  // Detectar si el snoop modifico el buffer
+  bool snoop_provided_data = false;
+  if (!pre_snoop_buf.empty()) {
+    snoop_provided_data =
+        (std::memcmp(pre_snoop_buf.data(),
+                     trans.get_data_ptr(),
+                     trans.get_data_length()) != 0);
+  }
 
+  const sc_core::sc_time t0 = delay;
   delay += latency_;
-  mem_socket->b_transport(trans, delay);
+
+  if (snoop_provided_data) {
+    tlm::tlm_generic_payload wb;
+    wb.set_command(tlm::TLM_WRITE_COMMAND);
+    wb.set_address(trans.get_address());
+    wb.set_data_ptr(trans.get_data_ptr());
+    wb.set_data_length(trans.get_data_length());
+    wb.set_streaming_width(trans.get_data_length());
+    wb.set_byte_enable_ptr(nullptr);
+    wb.set_dmi_allowed(false);
+    wb.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    sc_core::sc_time wb_delay = delay;
+    mem_socket->b_transport(wb, wb_delay);
+    // El delay principal no se incrementa con el writeback (es en paralelo)
+    trans.set_response_status(tlm::TLM_OK_RESPONSE);
+  } else {
+    mem_socket->b_transport(trans, delay);
+  }
 
   if (monitor_) {
     monitor_->record_bus_transaction(

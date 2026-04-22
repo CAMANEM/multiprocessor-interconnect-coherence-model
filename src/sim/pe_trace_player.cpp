@@ -90,17 +90,7 @@ void PeTracePlayer::thread_main() {
     if (abs_time > sc_core::sc_time_stamp())
       wait(abs_time - sc_core::sc_time_stamp());
 
-    // Separador y encabezado de operacion
-    std::cout << "\n----------------------------------------------------\n"
-              << "[PE-" << pe_id_
-              << " | tick=" << e.tick << " ns"
-              << " | op " << op_num << "/" << entries_.size() << "]\n"
-              << "  Operacion : "
-              << (e.op == MemoryOperation::Read ? "LECTURA (R)" : "ESCRITURA (W)") << "\n"
-              << "  Direccion : 0x" << std::hex << std::setw(8)
-              << std::setfill('0') << e.address << std::dec << "\n"
-              << "  Tamano    : " << e.size << " bytes\n";
-
+    // Preparar transaccion
     tlm::tlm_generic_payload trans;
     trans.set_address(e.address);
     trans.set_streaming_width(e.size);
@@ -111,32 +101,47 @@ void PeTracePlayer::thread_main() {
 
     if (e.op == MemoryOperation::Read) {
       trans.set_command(tlm::TLM_READ_COMMAND);
-      std::cout << "  Valor     : (esperando respuesta de la cache...)\n";
     } else {
       trans.set_command(tlm::TLM_WRITE_COMMAND);
       encode_value(e.value, buf, e.size);
-      std::cout << "  Valor     : "
-                << (e.value.empty() ? "(cero)" : e.value)
-                << "  ->  " << format_value(buf) << "\n";
     }
 
     trans.set_byte_enable_ptr(nullptr);
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
+    // Ejecutar transaccion (aqui ocurren los prints de cache/bus/memoria)
     sc_core::sc_time local_delay = sc_core::SC_ZERO_TIME;
     socket->b_transport(trans, local_delay);
     wait(local_delay);
 
+    std::ostringstream blk;
+    blk << "\n----------------------------------------------------\n"
+        << "[PE-" << pe_id_
+        << " | tick=" << e.tick << " ns"
+        << " | op " << op_num << "/" << entries_.size() << "]\n"
+        << "  Operacion : "
+        << (e.op == MemoryOperation::Read ? "LECTURA (R)" : "ESCRITURA (W)") << "\n"
+        << "  Direccion : 0x" << std::hex << std::setw(8)
+        << std::setfill('0') << e.address << std::dec << "\n"
+        << "  Tamano    : " << e.size << " bytes\n";
+
+    if (e.op == MemoryOperation::Read) {
+      blk << "  Valor leido: " << format_value(buf) << "\n";
+    } else {
+      blk << "  Valor escrito: "
+          << (e.value.empty() ? "(cero)" : e.value)
+          << "  ->  " << format_value(buf) << "\n";
+    }
+
     if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-      std::cout << "  [ERROR] La transaccion fallo (status="
-                << static_cast<int>(trans.get_response_status()) << ")\n";
+      blk << "  [ERROR] La transaccion fallo (status="
+          << static_cast<int>(trans.get_response_status()) << ")\n";
+      std::cout << blk.str();
       Log::error(std::string("[") + name() + "] TLM error");
     } else {
-      if (e.op == MemoryOperation::Read) {
-        std::cout << "  Valor leido: " << format_value(buf) << "\n";
-      }
-      std::cout << "  Latencia acumulada: " << local_delay.to_string() << "\n";
+      blk << "  Latencia acumulada: " << local_delay.to_string() << "\n";
+      std::cout << blk.str();
     }
   }
 
