@@ -50,6 +50,17 @@ void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type) 
  */
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
+  while(true){
+    bus_mutex_.lock();
+    if(rr_next_ == id){
+      break;
+    }
+    bus_mutex_.unlock();
+    wait(SC_ZERO_TIME);
+  }
+
+  --rr_tokens_;
+
   const tlm::tlm_command cmd = trans.get_command();
   if (Log::enabled(LogLevel::Info)) {
     std::ostringstream os;
@@ -79,6 +90,12 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
         static_cast<uint64_t>(trans.get_data_length()),
         delay - t0);
   }
+
+  if(rr_tokens_ == 0){
+    rr_next_ = (rr_next_ + 1) % kPorts;
+    rr_tokens_ = kQuantum;
+  }
+  bus_mutex_.unlock();
 }
 
 /** Port dispatchers */
