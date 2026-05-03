@@ -53,9 +53,28 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
   while(true){
     bus_mutex_.lock();
-    if(rr_next_ == id){
+    
+    /* Checks for high priority transactions from PEs */
+    bool higher_priority_waiting = false;
+    if (pending_priority_[id] == 0) {
+      for (int i = 0; i < kPorts; ++i) {
+        if (i != id && pending_priority_[i] == 1) {
+          higher_priority_waiting = true;
+          break;
+        }
+      }
+    }
+
+    if(rr_next_ == id && !higher_priority_waiting){
       break;
     }
+
+    if(pending_priority_[id] == 1 && pending_priority_[rr_next_] == 0){
+      rr_next_ = id;
+      rr_tokens_ = kQuantum;
+      break;
+    }
+
     bus_mutex_.unlock();
     wait(SC_ZERO_TIME);
   }
@@ -96,7 +115,14 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
     rr_next_ = (rr_next_ + 1) % kPorts;
     rr_tokens_ = kQuantum;
   }
+
+  pending_priority_[id] = 0;
+
   bus_mutex_.unlock();
+}
+
+void Interconnect::notify_priority(int pe_id, int priority) {
+  pending_priority_[pe_id] = priority;
 }
 
 /** Port dispatchers */

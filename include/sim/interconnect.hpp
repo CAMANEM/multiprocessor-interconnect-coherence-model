@@ -36,6 +36,14 @@ public:
 
   void register_cache(int id, L1Cache* cache);
 
+  /** 
+   * Notifies the interconnect of a change in priority for a specific PE.
+   * 
+   * @param pe_id PE that has changed priority
+   * @param priority new priority: 0 = normal, 1 = high priority
+   * */
+  void notify_priority(int pe_id, int priority);
+
 private:
   void b_transport0(tlm::tlm_generic_payload&, sc_core::sc_time&);
   void b_transport1(tlm::tlm_generic_payload&, sc_core::sc_time&);
@@ -49,6 +57,8 @@ private:
 
   Monitor*          monitor_{ nullptr };
   sc_core::sc_time  latency_;
+
+  std::array<int, kPorts> pending_priority_{};
 
   /* For round robin scheduling */
   /* Quantum set on 1 for traces with low contention. In case of high contention, quantum on 2 or 3 is recommended */

@@ -51,7 +51,8 @@ Top::Top(sc_core::sc_module_name name, const TraceFile& trace, CoherenceProtocol
     pe_[i] = std::make_unique<PeTracePlayer>(
         pe_name.c_str(),
         i,                         // PE ID
-        trace.entries_for_pe(i)    // subset of trace for this PE
+        trace.entries_for_pe(i),   // subset of trace for this PE
+        &ic_                       // interconnect for priority notifications
     );
   }
 
