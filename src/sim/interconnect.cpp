@@ -17,7 +17,8 @@ Interconnect::Interconnect(sc_core::sc_module_name name, Monitor* monitor,
       tgt0("tgt0"), tgt1("tgt1"), tgt2("tgt2"), tgt3("tgt3"),
       mem_socket("mem_socket"),
       monitor_(monitor),
-      latency_(latency) {
+      latency_(latency),
+       bus_mutex_("bus_mutex") {
 
   tgt0.register_b_transport(this, &Interconnect::b_transport0);
   tgt1.register_b_transport(this, &Interconnect::b_transport1);

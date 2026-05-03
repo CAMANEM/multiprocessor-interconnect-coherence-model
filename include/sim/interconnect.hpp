@@ -5,9 +5,6 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <array>
 
-/* For scheduling */
-#include <mutex>
-
 namespace mp {
 
 class Monitor;
@@ -54,12 +51,12 @@ private:
   sc_core::sc_time  latency_;
 
   /* For round robin scheduling */
+  /* Quantum set on 1 for traces with low contention. In case of high contention, quantum on 2 or 3 is recommended */
+  static constexpr int kQuantum = 1; 
   sc_core::sc_mutex bus_mutex_;
   int               rr_next_{0};
   /* For tracking the number of consecutive instructions available for round-robin scheduling */
-  int               rr_tokens_{0};
-  /* Quantum set on 1 for traces with low contention. In case of high contention, quantum on 2 or 3 is recommended */
-  static constexpr int kQuantum = 1; 
+  int               rr_tokens_{kQuantum};
 };
 
 }  // namespace mp
