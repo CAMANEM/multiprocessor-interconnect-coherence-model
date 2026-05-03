@@ -1,12 +1,41 @@
-# CE4302 trace v1 (checked-in example; regenerate with tools/tracegen)
-# Workload: producer-consumer on shared line 0x8000
-0 2 R 0x8000 4
-1 0 W 0x8000 4 45
-2 1 R 0x8000 4
-3 0 W 0x8000 4 80
-4 1 R 0x8000 4
-5 0 W 0x8000 4 700
-6 1 R 0x8000 4
-7 0 W 0x8000 4 20
-8 1 R 0x8000 4
-9 2 R 0x8000 4
+# CE4302 trace v1
+# Workload: producer-consumer con dos pares en paralelo
+#   Par A: PE0 escribe 0x8000, PE1 lee 0x8000
+#   Par B: PE2 escribe 0x9000, PE3 lee 0x9000
+# Causalidad: consumidor espera MISS_LATENCY=43 ns desde ultima escritura del productor
+# Paralelismo: Par A y Par B tienen ticks identicos (independientes)
+# Soporte ADD/SUB: los productores usaran ADD cuando se implemente
+#
+# tick  pe  op  addr    size  valor
+0 0 W 0x8000 4 0
+0 2 W 0x9000 4 100
+43 1 R 0x8000 4
+43 3 R 0x9000 4
+86 0 W 0x8000 4 1
+86 2 W 0x9000 4 101
+129 1 R 0x8000 4
+129 3 R 0x9000 4
+172 0 W 0x8000 4 2
+172 2 W 0x9000 4 102
+215 1 R 0x8000 4
+215 3 R 0x9000 4
+258 0 W 0x8000 4 3
+258 2 W 0x9000 4 103
+301 1 R 0x8000 4
+301 3 R 0x9000 4
+344 0 W 0x8000 4 4
+344 2 W 0x9000 4 104
+387 1 R 0x8000 4
+387 3 R 0x9000 4
+430 0 W 0x8000 4 5
+430 2 W 0x9000 4 105
+473 1 R 0x8000 4
+473 3 R 0x9000 4
+516 0 W 0x8000 4 6
+516 2 W 0x9000 4 106
+559 1 R 0x8000 4
+559 3 R 0x9000 4
+602 0 W 0x8000 4 7
+602 2 W 0x9000 4 107
+645 1 R 0x8000 4
+645 3 R 0x9000 4

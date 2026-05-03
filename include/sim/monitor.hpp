@@ -2,16 +2,14 @@
 
 #include <cstdint>
 #include <ostream>
-
+#include <string>
 #include <sysc/kernel/sc_time.h>
 
 namespace mp {
 
 enum class BusTransaction : std::uint8_t;
 
-/** Cache line state labels (reserved for MSI/Firefly instrumentation). */
 enum class CacheStateLabel : std::uint8_t {
-  // Placeholders for future MSI/Firefly instrumentation
   Invalid = 0,
   Shared,
   Modified,
@@ -19,75 +17,45 @@ enum class CacheStateLabel : std::uint8_t {
   Exclusive
 };
 
-/**
- * Lightweight bus metrics (transaction count, bytes, accumulated latency).
- * Not a SystemC module; shared by pointer across components.
- */
 class Monitor {
 public:
-  /**
-   * Records one bus transaction (e.g. observed from the interconnect).
-   *
-   * @param pe_id port or PE index; may be -1 if not applicable
-   * @param bytes number of bytes transferred in this transaction
-   * @param latency attributed latency (TLM time delta)
-   * @param type coherence transaction kind observed on the bus
-   */
-  void record_bus_transaction(int pe_id, std::uint64_t bytes, const sc_core::sc_time& latency,
+  void record_bus_transaction(int pe_id, std::uint64_t bytes,
+                              const sc_core::sc_time& latency,
                               BusTransaction type);
 
-  /**
-   * Hook reserved for cache line state transitions (logging / visualization).
-   *
-   * @param cache_id L1 cache identifier
-   * @param line_addr line-aligned address
-   * @param from previous state
-   * @param to new state
-   */
-  void on_cache_state_change(int cache_id, std::uint64_t line_addr, CacheStateLabel from,
-                             CacheStateLabel to);
+  void on_cache_state_change(int cache_id, std::uint64_t line_addr,
+                             CacheStateLabel from, CacheStateLabel to);
 
-  /**
-   * @return number of bus transactions recorded
-   */
-  std::uint64_t bus_transactions() const { return bus_transactions_; }
-
-  /**
-   * @return total bytes transferred across recorded transactions
-   */
-  std::uint64_t bus_bytes() const { return bus_bytes_; }
-
-  /**
-   * @return sum of per-transaction recorded latencies
-   */
-  sc_core::sc_time total_latency() const { return total_latency_; }
-
-  /** @return number of BusRd transactions recorded. */
-  std::uint64_t bus_rd_transactions() const { return bus_rd_transactions_; }
-
-  /** @return number of BusRdX transactions recorded. */
-  std::uint64_t bus_rdx_transactions() const { return bus_rdx_transactions_; }
-
-  /** @return number of BusUpd transactions recorded. */
-  std::uint64_t bus_upd_transactions() const { return bus_upd_transactions_; }
-
-  /** @return total number of observed cache state transitions. */
+  std::uint64_t bus_transactions()      const { return bus_transactions_; }
+  std::uint64_t bus_bytes()             const { return bus_bytes_; }
+  std::uint64_t bus_rd_transactions()   const { return bus_rd_transactions_; }
+  std::uint64_t bus_rdx_transactions()  const { return bus_rdx_transactions_; }
+  std::uint64_t bus_upd_transactions()  const { return bus_upd_transactions_; }
   std::uint64_t cache_state_transitions() const { return cache_state_transitions_; }
+  sc_core::sc_time total_latency()      const { return total_latency_; }
 
-  /**
-   * Writes one human-readable summary line with aggregate counters.
-   *
-   * @param os output stream (e.g. std::cout)
-   */
+  // Escribe una linea de texto con todos los contadores (para consola)
   void dump_summary_line(std::ostream& os) const;
 
+  // Escribe cabecera CSV (llamar una vez antes de la primera fila)
+  static void dump_csv_header(std::ostream& os);
+
+  // Escribe una fila CSV con los contadores actuales mas metadatos del run
+  //   trace_name : nombre del archivo de trace (ej. "producer_consumer")
+  //   protocol   : "msi" o "firefly"
+  //   sim_end_ns : tiempo final de simulacion en ns
+  void dump_csv_row(std::ostream& os,
+                    const std::string& trace_name,
+                    const std::string& protocol,
+                    double sim_end_ns) const;
+
 private:
-  std::uint64_t bus_transactions_{0};
-  std::uint64_t bus_bytes_{0};
-  std::uint64_t bus_rd_transactions_{0};
-  std::uint64_t bus_rdx_transactions_{0};
-  std::uint64_t bus_upd_transactions_{0};
-  std::uint64_t cache_state_transitions_{0};
+  std::uint64_t    bus_transactions_{0};
+  std::uint64_t    bus_bytes_{0};
+  std::uint64_t    bus_rd_transactions_{0};
+  std::uint64_t    bus_rdx_transactions_{0};
+  std::uint64_t    bus_upd_transactions_{0};
+  std::uint64_t    cache_state_transitions_{0};
   sc_core::sc_time total_latency_{sc_core::SC_ZERO_TIME};
 };
 

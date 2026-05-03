@@ -1,11 +1,9 @@
 #include "pe_trace_player.hpp"
-
 #include <iomanip>
-#include <iostream>
 #include <sstream>
 #include <cstring>
-
 #include <tlm>
+#include "event_log.hpp"
 #include "log.hpp"
 
 namespace mp {
@@ -17,29 +15,22 @@ PeTracePlayer::PeTracePlayer(sc_core::sc_module_name name, int pe_id,
   SC_THREAD(thread_main);
 }
 
-static void encode_value(const std::string& value_tok,
-                         std::vector<unsigned char>& buf,
+static void encode_value(const std::string& tok, std::vector<unsigned char>& buf,
                          std::uint32_t size) {
   std::fill(buf.begin(), buf.end(), 0);
-  if (value_tok.empty()) return;
-
-  if (value_tok.size() >= 2 &&
-      value_tok.front() == '"' && value_tok.back() == '"') {
-    const std::string content = value_tok.substr(1, value_tok.size() - 2);
-    const std::uint32_t n =
-        static_cast<std::uint32_t>(std::min<std::size_t>(content.size(), size));
-    std::memcpy(buf.data(), content.data(), n);
+  if (tok.empty()) return;
+  if (tok.size() >= 2 && tok.front() == '"' && tok.back() == '"') {
+    const std::string c = tok.substr(1, tok.size() - 2);
+    std::memcpy(buf.data(), c.data(), std::min<std::size_t>(c.size(), size));
     return;
   }
-  if (value_tok.size() >= 3 &&
-      value_tok.front() == '\'' && value_tok.back() == '\'') {
-    buf[0] = static_cast<unsigned char>(value_tok[1]);
-    return;
+  if (tok.size() >= 3 && tok.front() == '\'' && tok.back() == '\'') {
+    buf[0] = static_cast<unsigned char>(tok[1]); return;
   }
   try {
     std::size_t idx = 0;
-    unsigned long long v = std::stoull(value_tok, &idx, 0);
-    if (idx == value_tok.size()) {
+    unsigned long long v = std::stoull(tok, &idx, 0);
+    if (idx == tok.size()) {
       for (std::uint32_t i = 0; i < size && i < 8; ++i)
         buf[i] = static_cast<unsigned char>((v >> (8 * i)) & 0xFF);
       return;
@@ -47,20 +38,18 @@ static void encode_value(const std::string& value_tok,
   } catch (...) {}
   try {
     std::size_t idx = 0;
-    long long v = std::stoll(value_tok, &idx, 0);
-    if (idx == value_tok.size()) {
+    long long v = std::stoll(tok, &idx, 0);
+    if (idx == tok.size()) {
       unsigned long long uv = static_cast<unsigned long long>(v);
       for (std::uint32_t i = 0; i < size && i < 8; ++i)
         buf[i] = static_cast<unsigned char>((uv >> (8 * i)) & 0xFF);
       return;
     }
   } catch (...) {}
-  const std::uint32_t n =
-      static_cast<std::uint32_t>(std::min<std::size_t>(value_tok.size(), size));
-  std::memcpy(buf.data(), value_tok.data(), n);
+  std::memcpy(buf.data(), tok.data(), std::min<std::size_t>(tok.size(), size));
 }
 
-static std::string format_value(const std::vector<unsigned char>& buf) {
+static std::string fmt_val(const std::vector<unsigned char>& buf) {
   if (buf.empty()) return "(sin datos)";
   const auto len = buf.size();
   if (len == 1 || len == 2 || len == 4 || len == 8) {
@@ -84,18 +73,16 @@ void PeTracePlayer::thread_main() {
   std::size_t op_num = 0;
   for (const TraceEntry& e : entries_) {
     ++op_num;
-
-    // Esperar hasta el tick indicado en el trace
     const sc_core::sc_time abs_time(static_cast<double>(e.tick), sc_core::SC_NS);
     if (abs_time > sc_core::sc_time_stamp())
       wait(abs_time - sc_core::sc_time_stamp());
 
-    // Preparar transaccion
+    const sc_core::sc_time t_launch = sc_core::sc_time_stamp();
+
     tlm::tlm_generic_payload trans;
     trans.set_address(e.address);
     trans.set_streaming_width(e.size);
     trans.set_data_length(e.size);
-
     std::vector<unsigned char> buf(e.size, 0);
     trans.set_data_ptr(buf.data());
 
@@ -110,42 +97,44 @@ void PeTracePlayer::thread_main() {
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-    // Ejecutar transaccion (aqui ocurren los prints de cache/bus/memoria)
     sc_core::sc_time local_delay = sc_core::SC_ZERO_TIME;
     socket->b_transport(trans, local_delay);
     wait(local_delay);
 
-    std::ostringstream blk;
-    blk << "\n----------------------------------------------------\n"
+    // Registrar el resultado en el log diferido con el tiempo de lanzamiento
+    // para que aparezca agrupado con los eventos de L1 y MEM de esta operacion
+    std::ostringstream msg;
+    msg << "----------------------------------------------------\n"
         << "[PE-" << pe_id_
         << " | tick=" << e.tick << " ns"
         << " | op " << op_num << "/" << entries_.size() << "]\n"
         << "  Operacion : "
         << (e.op == MemoryOperation::Read ? "LECTURA (R)" : "ESCRITURA (W)") << "\n"
-        << "  Direccion : 0x" << std::hex << std::setw(8)
-        << std::setfill('0') << e.address << std::dec << "\n"
+        << "  Direccion : 0x" << std::hex << std::setw(8) << std::setfill('0')
+        << e.address << std::dec << "\n"
         << "  Tamano    : " << e.size << " bytes\n";
 
-    if (e.op == MemoryOperation::Read) {
-      blk << "  Valor leido: " << format_value(buf) << "\n";
+    if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
+      msg << "  [ERROR] transaccion fallo (status="
+          << static_cast<int>(trans.get_response_status()) << ")\n";
     } else {
-      blk << "  Valor escrito: "
-          << (e.value.empty() ? "(cero)" : e.value)
-          << "  ->  " << format_value(buf) << "\n";
+      if (e.op == MemoryOperation::Write) {
+        msg << "  Valor escrito: "
+            << (e.value.empty() ? "(cero)" : e.value)
+            << "  ->  " << fmt_val(buf) << "\n";
+      } else {
+        msg << "  Valor leido: " << fmt_val(buf) << "\n";
+      }
+      msg << "  Latencia acumulada: " << local_delay.to_string() << "\n";
     }
 
-    if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-      blk << "  [ERROR] La transaccion fallo (status="
-          << static_cast<int>(trans.get_response_status()) << ")\n";
-      std::cout << blk.str();
-      Log::error(std::string("[") + name() + "] TLM error");
-    } else {
-      blk << "  Latencia acumulada: " << local_delay.to_string() << "\n";
-      std::cout << blk.str();
-    }
+    // Usar t_launch para que este bloque aparezca al inicio de su grupo
+    EventLog::record(t_launch, msg.str());
   }
 
-  std::cout << "[PE-" << pe_id_ << "] Todas las operaciones completadas.\n";
+  std::ostringstream done;
+  done << "[PE-" << pe_id_ << "] Todas las operaciones completadas.";
+  EventLog::record(sc_core::sc_time_stamp(), done.str());
 }
 
 }  // namespace mp
