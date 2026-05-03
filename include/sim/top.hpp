@@ -20,13 +20,7 @@ namespace mp {
  */
 class Top : public sc_core::sc_module {
 public:
-  /**
-   * Builds hierarchy, creates submodules, and binds PE→L1→interconnect→memory sockets.
-   *
-   * @param name SystemC module name
-   * @param trace loaded trace (split per PE via entries_for_pe)
-   * @param protocol MSI/Firefly selection forwarded to L1s (stub)
-   */
+  /** Builds hierarchy and wires PE->L1->interconnect->memory sockets. */
   Top(sc_core::sc_module_name name, const TraceFile& trace, CoherenceProtocolKind protocol);
 
   /**

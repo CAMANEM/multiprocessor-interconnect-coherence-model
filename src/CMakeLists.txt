@@ -69,6 +69,7 @@ if(MP_BUILD_SIM)
     sim/main.cpp
     sim/log.cpp
     sim/top.cpp
+    sim/event_log.cpp
     sim/pe_trace_player.cpp
     sim/l1_cache.cpp
     sim/interconnect.cpp

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <systemc>
+#include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 #include <array>
@@ -11,7 +13,26 @@ class Monitor;
 class L1Cache;
 
 /** Coherence transactions supported by the interconnect. */
-enum class BusTransaction { BusRd, BusRdX };  
+enum class BusTransaction : std::uint8_t { BusRd, BusRdX, BusUpd };
+
+/**
+ * Optional payload extension used by L1 to hint which coherence transaction
+ * should be broadcast by the interconnect.
+ */
+struct CoherenceHintExtension : tlm::tlm_extension<CoherenceHintExtension> {
+  BusTransaction transaction{BusTransaction::BusRd};
+
+  explicit CoherenceHintExtension(BusTransaction t = BusTransaction::BusRd)
+      : transaction(t) {}
+
+  tlm::tlm_extension_base* clone() const override {
+    return new CoherenceHintExtension(transaction);
+  }
+
+  void copy_from(const tlm::tlm_extension_base& ext) override {
+    transaction = static_cast<const CoherenceHintExtension&>(ext).transaction;
+  }
+};
 
 /**
  * Cache-coherent interconnect (bus-based).
@@ -43,7 +64,8 @@ private:
   void b_transport3(tlm::tlm_generic_payload&, sc_core::sc_time&);
 
   void forward(int id, tlm::tlm_generic_payload&, sc_core::sc_time&);
-  void snoop_all(int requester, uint64_t addr, BusTransaction type);
+  void snoop_all(int requester, uint64_t addr, BusTransaction type,
+                 const tlm::tlm_generic_payload* trans);
 
   std::array<L1Cache*, kPorts> caches_;
 

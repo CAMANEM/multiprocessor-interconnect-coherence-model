@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <systemc>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
@@ -14,16 +15,19 @@ class Monitor;
 /** Coherence protocol family selection. */
 enum class CoherenceProtocolKind { Msi, Firefly };
 
-/** Cache line coherence states (MSI protocol). */
+/** Cache line coherence states used by MSI and simplified Firefly. */
 enum class CacheState { I, S, M };
+
+inline constexpr std::size_t kCacheLineBytes = 64;
 
 /** Represents a single cache line entry. */
 struct CacheLine {
   CacheState state{ CacheState::I };
+  std::array<unsigned char, kCacheLineBytes> data{};
 };
 
 /**
- * Private L1 cache implementing a simplified MSI coherence protocol.
+ * Private L1 cache implementing selectable MSI/Firefly coherence behavior.
  *
  * Responsibilities:
  *  - Serve CPU requests (reads/writes)
@@ -39,13 +43,7 @@ public:
   /** Interconnect side socket (outgoing requests). */
   tlm_utils::simple_initiator_socket<L1Cache> mem_socket;
 
-  /**
-   * @param name           SystemC module name
-   * @param id             cache identifier (0..3)
-   * @param monitor        optional metrics collector
-   * @param protocol       selected coherence protocol (MSI active)
-   * @param latency        fixed lookup latency per access
-   */
+  /** Builds an L1 cache with selected coherence protocol and fixed lookup latency. */
   L1Cache(sc_core::sc_module_name name, int id, Monitor* monitor,
           CoherenceProtocolKind protocol, const sc_core::sc_time& latency);
 
@@ -57,13 +55,8 @@ public:
    */
   void b_transport_cpu(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
 
-  /**
-   * Handles snooped bus transactions from the interconnect.
-   *
-   * @param addr  accessed memory address
-   * @param type  type of coherence transaction (BusRd / BusRdX)
-   */
-  void snoop(uint64_t addr, BusTransaction type);
+  /** Handles snooped bus transactions from the interconnect. */
+  void snoop(uint64_t addr, BusTransaction type, const tlm::tlm_generic_payload* trans);
 
 private:
   /**
@@ -74,12 +67,52 @@ private:
    */
   uint64_t align_down(uint64_t addr);
 
+  /** Validates that payload stays inside one cache line. */
+  bool payload_fits_line(uint64_t line_addr, const tlm::tlm_generic_payload& trans) const;
+
+  /** Copies payload bytes from cache line into trans data buffer. */
+  void read_from_line(uint64_t line_addr, const CacheLine& line,
+                      tlm::tlm_generic_payload& trans) const;
+
+  /** Writes trans payload bytes into cache line. */
+  void write_to_line(uint64_t line_addr, CacheLine& line,
+                     const tlm::tlm_generic_payload& trans);
+
+  /** Applies BusUpd payload bytes into this line when snooping Firefly updates. */
+  void apply_bus_update(uint64_t line_addr, CacheLine& line,
+                        const tlm::tlm_generic_payload& trans);
+
+  /** Sends a request to interconnect with an explicit coherence transaction hint. */
+  void emit_bus_transaction(BusTransaction txn, tlm::tlm_generic_payload& trans,
+                            sc_core::sc_time& delay);
+
+  /** Dispatch entry for MSI CPU-side state machine. */
+  void handle_cpu_msi(uint64_t addr, bool is_write, tlm::tlm_generic_payload& trans,
+                      sc_core::sc_time& delay);
+
+  /** Dispatch entry for Firefly CPU-side state machine. */
+  void handle_cpu_firefly(uint64_t addr, bool is_write, tlm::tlm_generic_payload& trans,
+                          sc_core::sc_time& delay);
+
+  /** Handles snooped traffic with MSI transition rules. */
+  void snoop_msi(uint64_t addr, BusTransaction type, const tlm::tlm_generic_payload* trans);
+
+  /** Handles snooped traffic with simplified Firefly transition rules. */
+  void snoop_firefly(uint64_t addr, BusTransaction type,
+                     const tlm::tlm_generic_payload* trans);
+
+  /** Centralizes state updates and monitor transition callbacks. */
+  void set_line_state(uint64_t addr, CacheLine& line, CacheState next_state);
+
+  /** String helper for logs. */
+  static const char* cache_state_name(CacheState state);
+
   int                      id_;        /**< Cache identifier */
   Monitor*                 monitor_;   /**< Metrics hook (optional) */
   CoherenceProtocolKind    protocol_;  /**< Selected protocol */
   sc_core::sc_time         latency_;   /**< Lookup latency */
 
-  static constexpr uint64_t kLineSize = 64; /**< Cache line size in bytes */
+  static constexpr uint64_t kLineSize = kCacheLineBytes; /**< Cache line size in bytes */
 
   /** Fully associative storage: line address → cache line */
   std::unordered_map<uint64_t, CacheLine> lines_;
