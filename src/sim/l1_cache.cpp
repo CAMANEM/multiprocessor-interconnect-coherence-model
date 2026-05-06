@@ -47,6 +47,9 @@ void elog(const sc_core::sc_time& t, const std::string& msg) {
 
 }  // namespace
 
+// ---------------------------------------------------------------
+//  Constructor
+// ---------------------------------------------------------------
 L1Cache::L1Cache(sc_core::sc_module_name name, int id, Monitor* monitor,
                  CoherenceProtocolKind protocol, const sc_core::sc_time& latency)
     : sc_module(name), cpu_socket("cpu_socket"), mem_socket("mem_socket"),
@@ -54,7 +57,12 @@ L1Cache::L1Cache(sc_core::sc_module_name name, int id, Monitor* monitor,
   cpu_socket.register_b_transport(this, &L1Cache::b_transport_cpu);
 }
 
-uint64_t L1Cache::align_down(uint64_t addr) { return addr - (addr % kLineSize); }
+// ---------------------------------------------------------------
+//  Utilidades internas
+// ---------------------------------------------------------------
+uint64_t L1Cache::align_down(uint64_t addr) {
+  return addr - (addr % kLineSize);
+}
 
 bool L1Cache::payload_fits_line(uint64_t line_addr,
                                 const tlm::tlm_generic_payload& trans) const {
@@ -125,6 +133,23 @@ void L1Cache::emit_bus_transaction(BusTransaction txn,
   trans.clear_extension(&hint);
 }
 
+// ---------------------------------------------------------------
+//  Entrada principal del CPU
+//
+//  ADD y SUB llegan al L1 como dos transacciones TLM separadas
+//  emitidas por pe_trace_player:
+//    1. TLM_READ  -> el PE lee el valor actual
+//    2. TLM_WRITE -> el PE escribe el resultado calculado
+//
+//  El L1 no necesita distinguir ADD/SUB de R/W: simplemente
+//  procesa cada TLM_READ o TLM_WRITE segun el protocolo.
+//  La atomicidad del RMW es responsabilidad del PE (modelo
+//  simplificado sin lock de bus).
+//
+//  Para agregar nuevas operaciones que el L1 deba tratar de
+//  forma especial (ej. CAS con semantica propia), agregar aqui
+//  una extension TLM personalizada y un nuevo caso en el switch.
+// ---------------------------------------------------------------
 void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans,
                                sc_core::sc_time& delay) {
   const uint64_t addr = align_down(trans.get_address());
@@ -132,8 +157,12 @@ void L1Cache::b_transport_cpu(tlm::tlm_generic_payload& trans,
     trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE); return;
   }
   switch (protocol_) {
-    case CoherenceProtocolKind::Msi:     handle_cpu_msi(addr, trans.is_write(), trans, delay);     break;
-    case CoherenceProtocolKind::Firefly: handle_cpu_firefly(addr, trans.is_write(), trans, delay); break;
+    case CoherenceProtocolKind::Msi:
+      handle_cpu_msi(addr, trans.is_write(), trans, delay);
+      break;
+    case CoherenceProtocolKind::Firefly:
+      handle_cpu_firefly(addr, trans.is_write(), trans, delay);
+      break;
   }
 }
 
@@ -178,6 +207,8 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
     }
 
     if (line.state == CacheState::S) {
+      // Upgrade S->M: necesitamos exclusividad para escribir
+      // Aplica tanto a W como a la fase de escritura de ADD/SUB
       write_to_line(addr, line, trans);
       std::ostringstream m;
       m << pfx(t, id_) << "UPGRADE S->M  addr=0x" << std::hex << std::setw(8)
@@ -262,6 +293,8 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
     }
 
     if (line.state == CacheState::S) {
+      // Firefly write-update: difundir el nuevo valor con BusUpd
+      // Aplica tanto a W como a la fase de escritura de ADD/SUB
       write_to_line(addr, line, trans);
       std::ostringstream m;
       m << pfx(t, id_) << "ACTUALIZACION S->S addr=0x" << std::hex << std::setw(8)
@@ -347,7 +380,8 @@ void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
         set_line_state(addr, line, CacheState::I);
       }
       break;
-    case BusTransaction::BusUpd: break;
+    case BusTransaction::BusUpd:
+      break;
   }
 }
 
