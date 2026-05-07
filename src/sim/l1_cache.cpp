@@ -1,4 +1,5 @@
 #include "l1_cache.hpp"
+#include <array>
 #include <cstring>
 #include <iomanip>
 #include <sstream>
@@ -104,16 +105,78 @@ void L1Cache::set_line_state(uint64_t addr, CacheLine& line, CacheState next) {
   if (line.state == next) return;
   const CacheState old = line.state;
   line.state = next;
-  if (!monitor_) return;
-  auto lbl = [](CacheState s) {
-    switch (s) {
-      case CacheState::I: return CacheStateLabel::Invalid;
-      case CacheState::S: return CacheStateLabel::Shared;
-      case CacheState::M: return CacheStateLabel::Modified;
-    }
-    return CacheStateLabel::Invalid;
-  };
-  monitor_->on_cache_state_change(id_, addr, lbl(old), lbl(next));
+  if (monitor_) {
+    auto lbl = [](CacheState s) {
+      switch (s) {
+        case CacheState::I: return CacheStateLabel::Invalid;
+        case CacheState::S: return CacheStateLabel::Shared;
+        case CacheState::M: return CacheStateLabel::Modified;
+      }
+      return CacheStateLabel::Invalid;
+    };
+    monitor_->on_cache_state_change(id_, addr, lbl(old), lbl(next));
+  }
+  if (next == CacheState::I) {
+    remove_from_lru(addr);
+    lines_.erase(addr);
+  }
+}
+
+void L1Cache::touch_line(uint64_t addr) {
+  auto it = lru_iter_.find(addr);
+  if (it != lru_iter_.end())
+    lru_order_.erase(it->second);
+  lru_order_.push_back(addr);
+  lru_iter_[addr] = std::prev(lru_order_.end());
+}
+
+void L1Cache::remove_from_lru(uint64_t addr) {
+  auto it = lru_iter_.find(addr);
+  if (it != lru_iter_.end()) {
+    lru_order_.erase(it->second);
+    lru_iter_.erase(it);
+  }
+}
+
+void L1Cache::writeback_dirty_line(uint64_t line_addr, const CacheLine& line,
+                                   sc_core::sc_time& delay) {
+  std::array<unsigned char, kCacheLineBytes> buf = line.data;
+  tlm::tlm_generic_payload wb;
+  wb.set_command(tlm::TLM_WRITE_COMMAND);
+  wb.set_address(line_addr);
+  wb.set_data_ptr(buf.data());
+  wb.set_data_length(static_cast<unsigned int>(kLineSize));
+  wb.set_streaming_width(static_cast<unsigned int>(kLineSize));
+  wb.set_byte_enable_ptr(nullptr);
+  wb.set_dmi_allowed(false);
+  wb.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+  emit_bus_transaction(BusTransaction::BusWrBack, wb, delay);
+}
+
+void L1Cache::evict_lru_if_full(uint64_t incoming_line_addr,
+                                sc_core::sc_time& delay) {
+  if (lines_.count(incoming_line_addr)) return;
+  if (lines_.size() < kL1NumLines) return;
+
+  const uint64_t victim = lru_order_.front();
+  const CacheLine victim_copy = lines_.at(victim);
+  const sc_core::sc_time t = sc_core::sc_time_stamp();
+  {
+    std::ostringstream m;
+    m << pfx(t, id_) << "EVICT LRU    addr=0x" << std::hex << std::setw(8)
+      << std::setfill('0') << victim << std::dec
+      << "  estado=" << cache_state_name(victim_copy.state)
+      << "  (L1 cap=" << kL1NumLines << " lineas)";
+    elog(t, m.str());
+  }
+  if (victim_copy.state == CacheState::M) {
+    std::ostringstream w;
+    w << "               Accion: BusWrBack 64B -> memoria (linea sucia)";
+    elog(t, w.str());
+    writeback_dirty_line(victim, victim_copy, delay);
+  }
+  remove_from_lru(victim);
+  lines_.erase(victim);
 }
 
 void L1Cache::emit_bus_transaction(BusTransaction txn,
@@ -161,6 +224,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       elog(t, m.str());
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
+      touch_line(addr);
       return;
     }
 
@@ -174,6 +238,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       elog(t, m.str());
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
+      touch_line(addr);
       return;
     }
 
@@ -189,6 +254,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       emit_bus_transaction(BusTransaction::BusRdX, trans, delay);
       set_line_state(addr, line, CacheState::M);
       delay += latency_;
+      touch_line(addr);
       return;
     }
   }
@@ -207,6 +273,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       << " -> busca datos en memoria principal";
     elog(t, m.str());
   }
+  evict_lru_if_full(addr, delay);
   emit_bus_transaction(bus_txn, trans, delay);
   CacheLine& line = lines_[addr];
   set_line_state(addr, line, new_state);
@@ -218,6 +285,7 @@ void L1Cache::handle_cpu_msi(uint64_t addr, bool is_write,
       << "  nuevo estado=" << cache_state_name(new_state);
     elog(sc_core::sc_time_stamp(), m.str());
   }
+  touch_line(addr);
   delay += latency_;
 }
 
@@ -245,6 +313,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       elog(t, m.str());
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
+      touch_line(addr);
       return;
     }
 
@@ -258,6 +327,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       elog(t, m.str());
       delay += latency_;
       trans.set_response_status(tlm::TLM_OK_RESPONSE);
+      touch_line(addr);
       return;
     }
 
@@ -273,6 +343,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       elog(t, m.str());
       emit_bus_transaction(BusTransaction::BusUpd, trans, delay);
       delay += latency_;
+      touch_line(addr);
       return;
     }
   }
@@ -291,6 +362,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       << " -> busca datos en memoria principal";
     elog(t, m.str());
   }
+  evict_lru_if_full(addr, delay);
   emit_bus_transaction(bus_txn, trans, delay);
   CacheLine& line = lines_[addr];
   set_line_state(addr, line, new_state);
@@ -302,6 +374,7 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
       << "  nuevo estado=" << cache_state_name(new_state);
     elog(sc_core::sc_time_stamp(), m.str());
   }
+  touch_line(addr);
   delay += latency_;
 }
 
@@ -348,6 +421,7 @@ void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
       }
       break;
     case BusTransaction::BusUpd: break;
+    case BusTransaction::BusWrBack: break;
   }
 }
 
@@ -403,6 +477,8 @@ void L1Cache::snoop_firefly(uint64_t addr, BusTransaction type,
         elog(t, m.str());
         set_line_state(addr, line, CacheState::S);
       }
+      break;
+    case BusTransaction::BusWrBack:
       break;
   }
 }

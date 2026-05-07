@@ -140,6 +140,7 @@ Con logs y monitor en mp.log:
 ./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug > mp.log 2>&1
 ```
 
+Evictions
 
 `--protocol` se acepta en CLI y se aplica en `L1Cache` como **selección arquitectónica activa**:
 

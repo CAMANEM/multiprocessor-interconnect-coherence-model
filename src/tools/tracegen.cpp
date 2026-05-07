@@ -40,7 +40,7 @@ namespace {
 
 void print_usage(const char* argv0) {
   std::cerr << "Usage: " << argv0
-            << " --workload pc|migratory --output <file.trace>\n";
+            << " --workload pc|migratory|eviction --output <file.trace>\n";
 }
 
 // ---------------------------------------------------------------
@@ -224,6 +224,37 @@ void write_migratory(std::ostream& os) {
   }
 }
 
+// ---------------------------------------------------------------
+//  Workload 3: estrés de evicción (LRU + write-back)
+//
+//  Una sola PE recorre más líneas distintas que caben en L1.
+//  Debe mantenerse kEvictionSweepLines > mp::kL1NumLines (l1_cache.hpp).
+// ---------------------------------------------------------------
+static constexpr int kEvictionSweepLines = 12;
+static constexpr std::uint64_t kEvictionBaseAddr = 0x10000;
+
+void write_eviction_stress(std::ostream& os) {
+  os << "# CE4302 trace v1\n"
+     << "# Workload: eviction stress\n"
+     << "# PE0 hace escrituras 4 B en " << kEvictionSweepLines
+     << " líneas (stride 64 B, base 0x" << std::hex << kEvictionBaseAddr << std::dec << ")\n"
+     << "# Tras llenar la L1 (" << kEvictionSweepLines
+     << " líneas > kL1NumLines), cada nueva línea expulsa una víctima LRU.\n"
+     << "# Si la víctima estaba en M, el modelo emite BusWrBack (64 B).\n"
+     << "# ticks separados por MISS_LATENCY=" << MISS_LATENCY
+     << " ns para alinear con latencia en empty-cache.\n"
+     << "#\n"
+     << "# tick  pe  op  addr    size  valor\n";
+
+  std::uint64_t t = 0;
+  for (int i = 0; i < kEvictionSweepLines; ++i) {
+    const std::uint64_t addr =
+        kEvictionBaseAddr + static_cast<std::uint64_t>(i) * 64;
+    os << t << " 0 W 0x" << std::hex << addr << std::dec << " 4 " << i << "\n";
+    t += MISS_LATENCY;
+  }
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -257,6 +288,8 @@ int main(int argc, char* argv[]) {
     write_producer_consumer(out);
   } else if (workload == "migratory" || workload == "migrate") {
     write_migratory(out);
+  } else if (workload == "eviction" || workload == "evict") {
+    write_eviction_stress(out);
   } else {
     std::cerr << "unknown workload: " << workload << "\n";
     print_usage(argv[0]);
