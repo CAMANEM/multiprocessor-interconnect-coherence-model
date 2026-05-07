@@ -12,9 +12,10 @@ void Monitor::record_bus_transaction(int /*pe_id*/, std::uint64_t bytes,
   total_latency_ += latency;
 
   switch (type) {
-    case BusTransaction::BusRd:  ++bus_rd_transactions_;  break;
-    case BusTransaction::BusRdX: ++bus_rdx_transactions_; break;
-    case BusTransaction::BusUpd: ++bus_upd_transactions_; break;
+    case BusTransaction::BusRd:     ++bus_rd_transactions_;  break;
+    case BusTransaction::BusRdX:    ++bus_rdx_transactions_; break;
+    case BusTransaction::BusUpd:    ++bus_upd_transactions_; break;
+    case BusTransaction::BusWrBack: ++bus_wb_transactions_;   break;
   }
 }
 
@@ -30,6 +31,7 @@ void Monitor::dump_summary_line(std::ostream& os) const {
      << " bus_rd="           << bus_rd_transactions_
      << " bus_rdx="          << bus_rdx_transactions_
      << " bus_upd="          << bus_upd_transactions_
+     << " bus_wb="           << bus_wb_transactions_
      << " state_transitions="<< cache_state_transitions_;
 }
 
@@ -45,6 +47,7 @@ void Monitor::dump_summary_line(std::ostream& os) const {
 //    bus_rd       - cantidad de BusRd (lecturas con miss)
 //    bus_rdx      - cantidad de BusRdX (escrituras / upgrades)
 //    bus_upd      - cantidad de BusUpd (solo Firefly)
+//    bus_wb       - cantidad de BusWrBack (write-back por eviccion M)
 //    state_trans  - transiciones de estado en caches (I->S, S->M, etc.)
 //    total_lat_ns - suma de latencias de todas las transacciones (ns)
 //    avg_lat_ns   - latencia promedio por transaccion (ns)
@@ -59,6 +62,7 @@ void Monitor::dump_csv_header(std::ostream& os) {
      << ",bus_rd"
      << ",bus_rdx"
      << ",bus_upd"
+     << ",bus_wb"
      << ",state_trans"
      << ",total_lat_ns"
      << ",avg_lat_ns"
@@ -86,6 +90,7 @@ void Monitor::dump_csv_row(std::ostream& os,
      << "," << bus_rd_transactions_
      << "," << bus_rdx_transactions_
      << "," << bus_upd_transactions_
+     << "," << bus_wb_transactions_
      << "," << cache_state_transitions_
      << "," << total_lat_ns
      << "," << avg_lat_ns

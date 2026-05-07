@@ -18,12 +18,12 @@ Top::Top(sc_core::sc_module_name name, const TraceFile& trace, CoherenceProtocol
       // Metrics monitor (shared across all components)
       monitor_(),
 
-      // Shared memory with fixed read/write latencies
+      // Shared memory with fixed read/write latencies (see SharedMemory::kSizeBytes)
       mem_("mem",
            sc_core::sc_time(40, sc_core::SC_NS),  // read latency
            sc_core::sc_time(40, sc_core::SC_NS)), // write latency
 
-      // Interconnect (bus) with fixed hop latency
+      // Interconnect: hop latency + memory bursts limited by Interconnect::kBusDataBytes (see interconnect.hpp).
       ic_("ic", &monitor_, sc_core::sc_time(2, sc_core::SC_NS)) {
 
   // Instantiate L1 caches
@@ -35,7 +35,7 @@ Top::Top(sc_core::sc_module_name name, const TraceFile& trace, CoherenceProtocol
         i,                      // cache ID
         &monitor_,              // metrics hook
         protocol,               // coherence protocol
-        sc_core::sc_time(1, sc_core::SC_NS) // lookup latency
+        sc_core::sc_time(1, sc_core::SC_NS) // L1 lookup; capacity kL1NumLines in l1_cache.hpp
     );
   }
 
