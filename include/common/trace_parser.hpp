@@ -17,6 +17,7 @@ struct TraceEntry {
   std::uint64_t address;
   std::uint32_t size;
   std::string value;
+  int priority{0};
 };
 
 /**

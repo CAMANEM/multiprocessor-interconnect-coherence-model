@@ -9,9 +9,8 @@
 namespace mp {
 
 PeTracePlayer::PeTracePlayer(sc_core::sc_module_name name, int pe_id,
-                             std::vector<TraceEntry> entries)
-    : sc_module(name), socket("socket"), pe_id_(pe_id),
-      entries_(std::move(entries)) {
+                             std::vector<TraceEntry> entries, Interconnect* interconnect)
+    : sc_module(name), socket("socket"), pe_id_(pe_id), entries_(std::move(entries)), interconnect_(interconnect) {
   SC_THREAD(thread_main);
 }
 
@@ -96,6 +95,10 @@ void PeTracePlayer::thread_main() {
     trans.set_byte_enable_ptr(nullptr);
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+    if (interconnect_) {
+      interconnect_->notify_priority(pe_id_, e.priority);
+    }
 
     sc_core::sc_time local_delay = sc_core::SC_ZERO_TIME;
     socket->b_transport(trans, local_delay);

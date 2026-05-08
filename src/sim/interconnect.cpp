@@ -38,7 +38,8 @@ Interconnect::Interconnect(sc_core::sc_module_name name, Monitor* monitor,
       tgt0("tgt0"), tgt1("tgt1"), tgt2("tgt2"), tgt3("tgt3"),
       mem_socket("mem_socket"),
       monitor_(monitor),
-      latency_(latency) {
+      latency_(latency),
+       bus_mutex_("bus_mutex") {
 
   tgt0.register_b_transport(this, &Interconnect::b_transport0);
   tgt1.register_b_transport(this, &Interconnect::b_transport1);
@@ -105,6 +106,36 @@ void Interconnect::memory_transport_chunked(int id, BusTransaction metrics_kind,
  */
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
+  while(true){
+    bus_mutex_.lock();
+    
+    /* Checks for high priority transactions from PEs */
+    bool higher_priority_waiting = false;
+    if (pending_priority_[id] == 0) {
+      for (int i = 0; i < kPorts; ++i) {
+        if (i != id && pending_priority_[i] == 1) {
+          higher_priority_waiting = true;
+          break;
+        }
+      }
+    }
+
+    if(rr_next_ == id && !higher_priority_waiting){
+      break;
+    }
+
+    if(pending_priority_[id] == 1 && pending_priority_[rr_next_] == 0){
+      rr_next_ = id;
+      rr_tokens_ = kQuantum;
+      break;
+    }
+
+    bus_mutex_.unlock();
+    wait(SC_ZERO_TIME);
+  }
+
+  --rr_tokens_;
+
   const tlm::tlm_command cmd = trans.get_command();
   const CoherenceHintExtension* hint = trans.get_extension<CoherenceHintExtension>();
   const BusTransaction bus_txn = hint ? hint->transaction
@@ -170,6 +201,19 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                              delay, true);
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
   }
+
+  if(rr_tokens_ == 0){
+    rr_next_ = (rr_next_ + 1) % kPorts;
+    rr_tokens_ = kQuantum;
+  }
+
+  pending_priority_[id] = 0;
+
+  bus_mutex_.unlock();
+}
+
+void Interconnect::notify_priority(int pe_id, int priority) {
+  pending_priority_[pe_id] = priority;
 }
 
 /** Port dispatchers */

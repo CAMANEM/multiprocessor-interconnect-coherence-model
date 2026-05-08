@@ -142,13 +142,15 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
     }
 
     // Read optional remaining tokens: could be just size, just value, or both
-    std::string tok5, tok6;
+    std::string tok5, tok6, tok7;
     (void)(iss >> tok5);
     (void)(iss >> tok6);
+    (void)(iss >> tok7);
 
-    // Separate size_tok and value_tok from tok5/tok6.
+    // Separate size_tok and value_tok from tok5/tok6/tok7.
     std::string size_tok;
     std::string value_tok;
+    std::string priority_tok;
 
     auto is_plain_number = [](const std::string& t) -> bool {
       if (t.empty()) return false;
@@ -166,10 +168,13 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
       } else if (is_plain_number(tok5) && !tok6.empty()) {
         size_tok  = tok5;
         value_tok = tok6;
+        if (!tok7.empty()) {
+          priority_tok = tok7;
+        }
       } else {
         value_tok = tok5;
         if (!tok6.empty()) {
-          // Ignore
+          priority_tok = tok6;
         }
       }
     }
@@ -226,12 +231,27 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
       if (size == 0) size = 4;
     }
 
-    entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok});
+    /* Parses the priority token */
+    int priority = 0;
+    if (!priority_tok.empty()) {
+      if (priority_tok == "1") {
+        priority = 1;
+      } else if (priority_tok != "0") {
+        error_out = "line " + std::to_string(line_no) + ": invalid priority. Priority must be 0 or 1."; 
+        return false;
+      }
+    }
+
+    entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok, priority});
   }
 
   std::sort(entries_.begin(), entries_.end(), [](const TraceEntry& a, const TraceEntry& b) {
     if (a.tick != b.tick) {
       return a.tick < b.tick;
+    }
+    if (a.priority != b.priority){
+      /* Higher priority first */
+      return a.priority > b.priority;
     }
     if (a.pe_id != b.pe_id) {
       return a.pe_id < b.pe_id;

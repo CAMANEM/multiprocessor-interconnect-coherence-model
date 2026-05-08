@@ -7,6 +7,8 @@
 
 #include "trace_parser.hpp"
 
+#include "interconnect.hpp"
+
 namespace mp {
 
 /**
@@ -24,8 +26,9 @@ public:
    * @param name SystemC module name
    * @param pe_id PE identifier (must match pe_id in the trace)
    * @param entries access list for this PE (typically from TraceFile::entries_for_pe)
+   * @param interconnect reference to the interconnect for priority notifications
    */
-  explicit PeTracePlayer(sc_core::sc_module_name name, int pe_id, std::vector<TraceEntry> entries);
+  explicit PeTracePlayer(sc_core::sc_module_name name, int pe_id, std::vector<TraceEntry> entries, Interconnect* interconnect);
 
 private:
   /**
@@ -35,6 +38,7 @@ private:
 
   int pe_id_{0};
   std::vector<TraceEntry> entries_;
+  Interconnect* interconnect_{nullptr};
 };
 
 }  // namespace mp
