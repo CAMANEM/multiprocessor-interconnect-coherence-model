@@ -97,7 +97,7 @@ private:
 
   static constexpr uint64_t kLineSize = kCacheLineBytes;
 
-  /** Valid lines only (states S or M); Invalid entries are removed from the structure. */
+  /** Stores resident lines; entries are erased when set_line_state transitions them to I. */
   std::unordered_map<uint64_t, CacheLine> lines_;
 
   /** LRU order: front = victim, back = MRU. */
