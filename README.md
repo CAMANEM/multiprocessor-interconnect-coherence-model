@@ -12,6 +12,11 @@ Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE430
 
 ## Instalación
 
+### En windows instalar [`PyQt6`]:
+```
+pip install PyQt6
+```
+
 ### En windows instalar [`Msys2`](https://www.msys2.org/) y ejecutar en él:
 
 ```bash
