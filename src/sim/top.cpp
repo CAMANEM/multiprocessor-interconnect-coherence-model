@@ -7,17 +7,25 @@ Top::Top(sc_core::sc_module_name name, const TraceFile& trace,
          CoherenceProtocolKind protocol)
     : sc_module(name),
       monitor_(),
+
+      // Shared memory with fixed read/write latencies (see SharedMemory::kSizeBytes)
       mem_("mem",
-           sc_core::sc_time(40, sc_core::SC_NS),
-           sc_core::sc_time(40, sc_core::SC_NS)),
+           sc_core::sc_time(40, sc_core::SC_NS),  // read latency
+           sc_core::sc_time(40, sc_core::SC_NS)), // write latency
+
+      // Interconnect: hop latency + memory bursts limited by Interconnect::kBusDataBytes (see interconnect.hpp).
       ic_("ic", &monitor_, sc_core::sc_time(2, sc_core::SC_NS)) {
 
   // L1 caches
   for (int i = 0; i < 4; ++i) {
     const std::string n = "l1_" + std::to_string(i);
     l1_[i] = std::make_unique<L1Cache>(
-        n.c_str(), i, &monitor_, protocol,
-        sc_core::sc_time(1, sc_core::SC_NS));
+        l1_name.c_str(),
+        i,                      // cache ID
+        &monitor_,              // metrics hook
+        protocol,               // coherence protocol
+        sc_core::sc_time(1, sc_core::SC_NS) // L1 lookup; capacity kL1NumLines in l1_cache.hpp
+    );
   }
 
   // Registrar caches en interconnect para snooping

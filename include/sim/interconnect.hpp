@@ -13,7 +13,13 @@ class Monitor;
 class L1Cache;
 
 /** Coherence transactions supported by the interconnect. */
-enum class BusTransaction : std::uint8_t { BusRd, BusRdX, BusUpd };
+enum class BusTransaction : std::uint8_t {
+  BusRd,
+  BusRdX,
+  BusUpd,
+  /** Dirty line write-back to RAM only; no snoop (other caches already Invalid). */
+  BusWrBack
+};
 
 /**
  * Optional payload extension used by L1 to hint which coherence transaction
@@ -40,10 +46,15 @@ struct CoherenceHintExtension : tlm::tlm_extension<CoherenceHintExtension> {
  * Responsibilities:
  *  - Forward transactions from L1 caches to shared memory
  *  - Broadcast coherence events to all other caches (snooping)
+ *  - Optional burst: payloads larger than kBusDataBytes cross the link in multiple beats
+ *    (each beat pays interconnect latency + memory latency).
  */
 class Interconnect : public sc_core::sc_module {
 public:
   static constexpr int kPorts = 4;
+
+  /** Max payload bytes per bus beat (e.g. 8 = 64-bit data path). */
+  static constexpr unsigned int kBusDataBytes = 8;
 
   tlm_utils::simple_target_socket<Interconnect> tgt0;
   tlm_utils::simple_target_socket<Interconnect> tgt1;
@@ -66,6 +77,15 @@ private:
   void forward(int id, tlm::tlm_generic_payload&, sc_core::sc_time&);
   void snoop_all(int requester, uint64_t addr, BusTransaction type,
                  const tlm::tlm_generic_payload* trans);
+
+  /**
+   * Memory-side transport in beats of at most kBusDataBytes.
+   * If record_metrics, registers one monitor sample per beat (latency = IC hop + MEM for that beat).
+   */
+  void memory_transport_chunked(int id, BusTransaction metrics_kind,
+                                  tlm::tlm_command cmd, std::uint64_t addr,
+                                  unsigned char* data, unsigned int length,
+                                  sc_core::sc_time& delay, bool record_metrics);
 
   std::array<L1Cache*, kPorts> caches_;
 
