@@ -341,6 +341,31 @@ void L1Cache::handle_cpu_firefly(uint64_t addr, bool is_write,
 // ---------------------------------------------------------------
 //  Snooping
 // ---------------------------------------------------------------
+
+void L1Cache::writeback_line_to_mem(uint64_t line_addr,
+                                     const CacheLine& line,
+                                     sc_core::sc_time& delay) {
+  // Escribe la linea M de vuelta a memoria para que quede consistente
+  // antes de cederla a otro PE. Sin esto, memoria tiene valor obsoleto.
+  std::array<unsigned char, kCacheLineBytes> buf = line.data;
+  tlm::tlm_generic_payload wb;
+  wb.set_address(line_addr);
+  wb.set_command(tlm::TLM_WRITE_COMMAND);
+  wb.set_data_ptr(buf.data());
+  wb.set_data_length(kCacheLineBytes);
+  wb.set_streaming_width(kCacheLineBytes);
+  wb.set_byte_enable_ptr(nullptr);
+  wb.set_dmi_allowed(false);
+  wb.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+  mem_socket->b_transport(wb, delay);
+  std::ostringstream m;
+  m << pfx(sc_core::sc_time_stamp(), id_)
+    << "WRITEBACK     addr=0x" << std::hex << std::setw(8)
+    << std::setfill('0') << line_addr << std::dec
+    << "  (linea M: flush a memoria antes de ceder la linea)";
+  elog(sc_core::sc_time_stamp(), m.str());
+}
+
 void L1Cache::snoop(uint64_t addr, BusTransaction type,
                     const tlm::tlm_generic_payload* trans) {
   const uint64_t line_addr = align_down(addr);
@@ -361,16 +386,25 @@ void L1Cache::snoop_msi(uint64_t addr, BusTransaction type,
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
+        // Writeback obligatorio: la linea fue modificada localmente.
+        // Memoria tiene el valor viejo. Hay que actualizarla ANTES
+        // de ceder la linea para que el PE solicitante lea el dato correcto.
+        { sc_core::sc_time d = sc_core::SC_ZERO_TIME;
+          writeback_line_to_mem(addr, line, d); }
         std::ostringstream m;
         m << pfx(t, id_) << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)
           << std::setfill('0') << addr << std::dec
-          << "  M->S  (otro cache pidio la linea; cedemos exclusividad)";
+          << "  M->S  (writeback + cedemos exclusividad)";
         elog(t, m.str());
         set_line_state(addr, line, CacheState::S);
       }
       break;
     case BusTransaction::BusRdX:
       if (line.state == CacheState::S || line.state == CacheState::M) {
+        if (line.state == CacheState::M) {
+          sc_core::sc_time d = sc_core::SC_ZERO_TIME;
+          writeback_line_to_mem(addr, line, d);
+        }
         std::ostringstream m;
         m << pfx(t, id_) << "SNOOP BusRdX  addr=0x" << std::hex << std::setw(8)
           << std::setfill('0') << addr << std::dec
@@ -395,16 +429,22 @@ void L1Cache::snoop_firefly(uint64_t addr, BusTransaction type,
   switch (type) {
     case BusTransaction::BusRd:
       if (line.state == CacheState::M) {
+        { sc_core::sc_time d = sc_core::SC_ZERO_TIME;
+          writeback_line_to_mem(addr, line, d); }
         std::ostringstream m;
         m << pfx(t, id_) << "SNOOP BusRd   addr=0x" << std::hex << std::setw(8)
           << std::setfill('0') << addr << std::dec
-          << "  M->S  (otro cache pidio la linea; compartimos)";
+          << "  M->S  (writeback + compartimos)";
         elog(t, m.str());
         set_line_state(addr, line, CacheState::S);
       }
       break;
     case BusTransaction::BusRdX:
       if (line.state == CacheState::S || line.state == CacheState::M) {
+        if (line.state == CacheState::M) {
+          sc_core::sc_time d = sc_core::SC_ZERO_TIME;
+          writeback_line_to_mem(addr, line, d);
+        }
         std::ostringstream m;
         m << pfx(t, id_) << "SNOOP BusRdX  addr=0x" << std::hex << std::setw(8)
           << std::setfill('0') << addr << std::dec
