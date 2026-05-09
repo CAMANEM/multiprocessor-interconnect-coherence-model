@@ -1,0 +1,15 @@
+workload "test"
+description "Contador compartido modificado atomicamente"
+
+pes 4
+
+pe(0): write 0x8000 100
+pe(1): add 0x8000 10
+pe(2): sub 0x8000 5
+pe(3): read 0x8000
+
+barrier
+
+pe(0): add 0x8000 1
+pe(1): sub 0x8000 3
+pe(3): read 0x8000

@@ -1,0 +1,16 @@
+workload "suma_acumulada"
+description "4 PEs suman en cadena al mismo acumulador en 0x5000"
+ 
+pes 4
+ 
+pe(0): write 0x5000 0
+ 
+pe(0): add 0x5000 1
+pe(1): add 0x5000 2
+pe(2): add 0x5000 3
+pe(3): add 0x5000 4
+pe(0): add 0x5000 5
+pe(1): add 0x5000 6
+pe(2): add 0x5000 7
+ 
+pe(3): read 0x5000

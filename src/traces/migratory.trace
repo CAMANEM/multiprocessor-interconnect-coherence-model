@@ -1,106 +1,38 @@
-# CE4302 trace v1
-# Workload: migratory con dos lineas en paralelo
-#   Linea A (0xA000): migra PE0->PE1->PE2->PE3->PE0...
-#   Linea B (0xB000): migra PE1->PE2->PE3->PE0->PE1...
-# Causalidad: cada PE espera MISS_LATENCY=43 ns desde ultima escritura sobre esa linea
-# Paralelismo: Linea A y Linea B son independientes; ticks coinciden
-# Soporte ADD/SUB: las escrituras W seran reemplazadas por ADD/SUB
-#                  cuando se implemente; la causalidad no cambia
+# CE4302 trace v2
+# Workload: migratory
+# Linea migra entre PEs en exclusividad
+# MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)
 #
-# tick  pe  op  addr    size  valor
+# tick  pe  op     addr        size  valor
 0 0 R 0xa000 4
 0 1 R 0xb000 4
 43 0 W 0xa000 4 0
-43 1 W 0xb000 4 100
+43 1 W 0xb000 4 0
 86 1 R 0xa000 4
 86 2 R 0xb000 4
-129 1 W 0xa000 4 1
-129 2 W 0xb000 4 101
-172 2 R 0xa000 4
-172 3 R 0xb000 4
-215 2 W 0xa000 4 2
-215 3 W 0xb000 4 102
-258 3 R 0xa000 4
-258 0 R 0xb000 4
-301 3 W 0xa000 4 3
-301 0 W 0xb000 4 103
+129 1 W 0xa000 4 0
+129 2 W 0xb000 4 0
+172 0 R 0xa000 4
+172 1 R 0xb000 4
+215 0 W 0xa000 4 1
+215 1 W 0xb000 4 1
+258 1 R 0xa000 4
+258 2 R 0xb000 4
+301 1 W 0xa000 4 1
+301 2 W 0xb000 4 1
 344 0 R 0xa000 4
 344 1 R 0xb000 4
-387 0 W 0xa000 4 4
-387 1 W 0xb000 4 104
+387 0 W 0xa000 4 2
+387 1 W 0xb000 4 2
 430 1 R 0xa000 4
 430 2 R 0xb000 4
-473 1 W 0xa000 4 5
-473 2 W 0xb000 4 105
-516 2 R 0xa000 4
-516 3 R 0xb000 4
-559 2 W 0xa000 4 6
-559 3 W 0xb000 4 106
-602 3 R 0xa000 4
-602 0 R 0xb000 4
-645 3 W 0xa000 4 7
-645 0 W 0xb000 4 107
-688 0 R 0xa000 4
-688 1 R 0xb000 4
-731 0 W 0xa000 4 8
-731 1 W 0xb000 4 108
-774 1 R 0xa000 4
-774 2 R 0xb000 4
-817 1 W 0xa000 4 9
-817 2 W 0xb000 4 109
-860 2 R 0xa000 4
-860 3 R 0xb000 4
-903 2 W 0xa000 4 10
-903 3 W 0xb000 4 110
-946 3 R 0xa000 4
-946 0 R 0xb000 4
-989 3 W 0xa000 4 11
-989 0 W 0xb000 4 111
-1032 0 R 0xa000 4
-1032 1 R 0xb000 4
-1075 0 W 0xa000 4 12
-1075 1 W 0xb000 4 112
-1118 1 R 0xa000 4
-1118 2 R 0xb000 4
-1161 1 W 0xa000 4 13
-1161 2 W 0xb000 4 113
-1204 2 R 0xa000 4
-1204 3 R 0xb000 4
-1247 2 W 0xa000 4 14
-1247 3 W 0xb000 4 114
-1290 3 R 0xa000 4
-1290 0 R 0xb000 4
-1333 3 W 0xa000 4 15
-1333 0 W 0xb000 4 115
-1376 0 R 0xa000 4
-1376 1 R 0xb000 4
-1419 0 W 0xa000 4 16
-1419 1 W 0xb000 4 116
-1462 1 R 0xa000 4
-1462 2 R 0xb000 4
-1505 1 W 0xa000 4 17
-1505 2 W 0xb000 4 117
-1548 2 R 0xa000 4
-1548 3 R 0xb000 4
-1591 2 W 0xa000 4 18
-1591 3 W 0xb000 4 118
-1634 3 R 0xa000 4
-1634 0 R 0xb000 4
-1677 3 W 0xa000 4 19
-1677 0 W 0xb000 4 119
-1720 0 R 0xa000 4
-1720 1 R 0xb000 4
-1763 0 W 0xa000 4 20
-1763 1 W 0xb000 4 120
-1806 1 R 0xa000 4
-1806 2 R 0xb000 4
-1849 1 W 0xa000 4 21
-1849 2 W 0xb000 4 121
-1892 2 R 0xa000 4
-1892 3 R 0xb000 4
-1935 2 W 0xa000 4 22
-1935 3 W 0xb000 4 122
-1978 3 R 0xa000 4
-1978 0 R 0xb000 4
-2021 3 W 0xa000 4 23
-2021 0 W 0xb000 4 123
+473 1 W 0xa000 4 2
+473 2 W 0xb000 4 2
+516 0 R 0xa000 4
+516 1 R 0xb000 4
+559 0 W 0xa000 4 3
+559 1 W 0xb000 4 3
+602 1 R 0xa000 4
+602 2 R 0xb000 4
+645 1 W 0xa000 4 3
+645 2 W 0xb000 4 3
