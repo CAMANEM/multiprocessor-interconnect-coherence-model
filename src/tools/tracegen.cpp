@@ -662,18 +662,33 @@ static void write_add_sub(TraceBuilder& tb) {
   tb.add_op(3, "R",   ADDR, 4, "",     "PE3 verifica: espera 103");
 }
 
+static constexpr int kEvictionSweepLines = 12;
+static constexpr std::uint64_t kEvictionBaseAddr = 0x10000;
+
+static void write_eviction_stress(TraceBuilder& tb) {
+  tb.name        = "eviction_stress";
+  tb.description = "PE0 escribe en mas lineas que kL1NumLines para forzar evicciones LRU";
+
+  for (int i = 0; i < kEvictionSweepLines; ++i) {
+    const std::uint64_t addr =
+        kEvictionBaseAddr + static_cast<std::uint64_t>(i) * 64;
+    tb.add_op(0, "W", addr, 4, std::to_string(i));
+  }
+}
+
 // ===============================================================
 //  MAIN
 // ===============================================================
 static void print_usage(const char* argv0) {
   std::cerr
     << "Uso:\n"
-    << "  " << argv0 << " --workload pc|migratory|add_sub --output <file.trace>\n"
+    << "  " << argv0 << " --workload pc|migratory|add_sub|eviction --output <file.trace>\n"
     << "  " << argv0 << " --compile <file.txt> [--output <file.trace>]\n"
     << "\nWorkloads predefinidos:\n"
     << "  pc        Producer-Consumer (dos pares en paralelo)\n"
     << "  migratory Patron migratorio (dos lineas en paralelo)\n"
     << "  add_sub   Ejemplo con ADD y SUB atomicos\n"
+    << "  eviction  Estres de eviccion (LRU + write-back)\n"
     << "\nCompilador:\n"
     << "  --compile prog.txt  Compila pseudocodigo a trace\n";
 }
@@ -738,6 +753,8 @@ int main(int argc, char* argv[]) {
       write_migratory(tb);
     else if (workload == "add_sub" || workload == "addsub")
       write_add_sub(tb);
+    else if (workload == "eviction" || workload == "evict")
+      write_eviction_stress(tb);
     else {
       std::cerr << "Workload desconocido: '" << workload << "'\n";
       print_usage(argv[0]);

@@ -30,6 +30,7 @@ public:
   std::uint64_t bus_rd_transactions()    const { return bus_rd_transactions_; }
   std::uint64_t bus_rdx_transactions()   const { return bus_rdx_transactions_; }
   std::uint64_t bus_upd_transactions()   const { return bus_upd_transactions_; }
+  std::uint64_t bus_wb_transactions()    const { return bus_wb_transactions_; }
   std::uint64_t cache_state_transitions()const { return cache_state_transitions_; }
   std::uint64_t pe_reads()               const { return pe_reads_; }
   std::uint64_t pe_writes()              const { return pe_writes_; }
@@ -51,6 +52,7 @@ private:
   std::uint64_t    bus_rd_transactions_{0};
   std::uint64_t    bus_rdx_transactions_{0};
   std::uint64_t    bus_upd_transactions_{0};
+  std::uint64_t    bus_wb_transactions_{0};
   std::uint64_t    cache_state_transitions_{0};
   sc_core::sc_time total_latency_{sc_core::SC_ZERO_TIME};
   // PE operations

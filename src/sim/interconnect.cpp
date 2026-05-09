@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <iomanip>
 #include <sstream>
@@ -20,6 +21,8 @@ const char* bus_txn_name(BusTransaction type) {
       return "BusRdX";
     case BusTransaction::BusUpd:
       return "BusUpd";
+    case BusTransaction::BusWrBack:
+      return "BusWrBack";
   }
   return "Unknown";
 }
@@ -64,6 +67,39 @@ void Interconnect::snoop_all(int requester, uint64_t addr, BusTransaction type,
   }
 }
 
+void Interconnect::memory_transport_chunked(int id, BusTransaction metrics_kind,
+                                            tlm::tlm_command cmd,
+                                            std::uint64_t addr,
+                                            unsigned char* data,
+                                            unsigned int length,
+                                            sc_core::sc_time& delay,
+                                            bool record_metrics) {
+  if (!data || length == 0) return;
+
+  for (unsigned int offset = 0; offset < length; offset += kBusDataBytes) {
+    const unsigned int chunk = std::min(kBusDataBytes, length - offset);
+
+    tlm::tlm_generic_payload beat;
+    beat.set_command(cmd);
+    beat.set_address(addr + offset);
+    beat.set_data_ptr(data + offset);
+    beat.set_data_length(chunk);
+    beat.set_streaming_width(chunk);
+    beat.set_byte_enable_ptr(nullptr);
+    beat.set_dmi_allowed(false);
+    beat.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+    const sc_core::sc_time t_beat_start = delay;
+    delay += latency_;
+    mem_socket->b_transport(beat, delay);
+
+    if (monitor_ && record_metrics) {
+      monitor_->record_bus_transaction(id, chunk, delay - t_beat_start,
+                                       metrics_kind);
+    }
+  }
+}
+
 /**
  * Forwards a transaction to memory and records metrics on the Monitor.
  */
@@ -74,6 +110,14 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
   const BusTransaction bus_txn = hint ? hint->transaction
                                       : (trans.is_write() ? BusTransaction::BusRdX
                                                           : BusTransaction::BusRd);
+
+  if (bus_txn == BusTransaction::BusWrBack) {
+    memory_transport_chunked(id, bus_txn, tlm::TLM_WRITE_COMMAND,
+                             trans.get_address(), trans.get_data_ptr(),
+                             trans.get_data_length(), delay, true);
+    trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    return;
+  }
 
   if (Log::enabled(LogLevel::Info)) {
     std::ostringstream os;
@@ -105,33 +149,26 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                      trans.get_data_length()) != 0);
   }
 
-  const sc_core::sc_time t0 = delay;
-  delay += latency_;
-
   if (snoop_provided_data) {
-    tlm::tlm_generic_payload wb;
-    wb.set_command(tlm::TLM_WRITE_COMMAND);
-    wb.set_address(trans.get_address());
-    wb.set_data_ptr(trans.get_data_ptr());
-    wb.set_data_length(trans.get_data_length());
-    wb.set_streaming_width(trans.get_data_length());
-    wb.set_byte_enable_ptr(nullptr);
-    wb.set_dmi_allowed(false);
-    wb.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    // Requester paga un hop de bus; el WB a RAM corre en paralelo (no aumenta delay del requester).
+    delay += latency_;
     sc_core::sc_time wb_delay = delay;
-    mem_socket->b_transport(wb, wb_delay);
-    // El delay principal no se incrementa con el writeback (es en paralelo)
+    memory_transport_chunked(id, bus_txn, tlm::TLM_WRITE_COMMAND,
+                             trans.get_address(), trans.get_data_ptr(),
+                             trans.get_data_length(), wb_delay, false);
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    if (monitor_) {
+      monitor_->record_bus_transaction(
+          id,
+          static_cast<std::uint64_t>(trans.get_data_length()),
+          latency_,
+          bus_txn);
+    }
   } else {
-    mem_socket->b_transport(trans, delay);
-  }
-
-  if (monitor_) {
-    monitor_->record_bus_transaction(
-        id,
-        static_cast<uint64_t>(trans.get_data_length()),
-        delay - t0,
-        bus_txn);
+    memory_transport_chunked(id, bus_txn, cmd, trans.get_address(),
+                             trans.get_data_ptr(), trans.get_data_length(),
+                             delay, true);
+    trans.set_response_status(tlm::TLM_OK_RESPONSE);
   }
 }
 

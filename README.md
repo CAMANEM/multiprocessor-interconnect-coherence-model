@@ -12,7 +12,7 @@ Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE430
 
 ## Instalación
 
-### En windows instalar Msys2 y ejecutar en él:
+### En windows instalar [`Msys2`](https://www.msys2.org/) y ejecutar en él:
 
 ```bash
 pacman -Syu
@@ -140,6 +140,14 @@ Con logs y monitor en mp.log:
 ./src/build/mp_sim --trace src/traces/migratory.trace --protocol firefly --log-level debug > mp.log 2>&1
 ```
 
+Evictions
+
+```bash
+./src/build/tracegen --workload eviction --output src/traces/eviction.trace
+./src/build/mp_sim --trace src/traces/eviction.trace --protocol msi
+./src/build/mp_sim --trace src/traces/eviction.trace        --protocol msi     --csv resultados.csv
+```
+
 
 `--protocol` se acepta en CLI y se aplica en `L1Cache` como **selección arquitectónica activa**:
 
@@ -171,6 +179,15 @@ Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 - Estados extendidos para Firefly completo (p. ej. `E`/`O`) y tabla formal de transiciones.
 - Tercer workload de **alta contención** para el rubro final (tres trazas frente a ambos protocolos).
 
-## Licencia y curso
+## 1. Parámetros de la jerarquía
 
-Proyecto académico CE4302. Revisa el enunciado oficial y las políticas de integridad académica del curso antes de reutilizar código de terceros.
+| Parámetro | Valor en el modelo | Justificación breve |
+|-----------|-------------------|---------------------|
+| Tamaño de línea L1 | **64 B** | Línea típica en caches L1 de procesadores comerciales; facilita comparar con literatura de coherencia (Hennessy & Patterson; primer TOCS). |
+| Capacidad L1 (por PE) | **`kL1NumLines` líneas** (por defecto **8** → **512 B**) | L1 deliberadamente pequeña respecto al working set de ciertas trazas para provocar **fallos por capacidad** y **evicciones LRU**; permite observar **BusWrBack** al expulsar líneas **M**. |
+| Memoria compartida | **16 MiB** lineales (`SharedMemory::kSizeBytes`) | Muy superior al footprint de las trazas de ejemplo; evita que el modelo se limite por falta de espacio de direcciones y centra el análisis en coherencia e interconnect. |
+| Latencia L1 | **1 ns** | Órdenes de magnitud menores que memoria principal; aciertos baratos frente a fallos. |
+| Latencia bus / interconnect | **2 ns** por *beat* de datos | Cada porción que cruza el bus hasta DRAM paga este salto además de la latencia DRAM del beat. |
+| Ancho de datos del bus | **`Interconnect::kBusDataBytes = 8`** (64 bits) | Si una transferencia supera 8 B, el modelo la **parte en varios viajes** consecutivos (burst software), cada uno con su latencia de bus + DRAM. |
+| Latencia DRAM (lectura/escritura) | **40 ns** | Valor agregado de acceso a fila; suficiente para separar impacto de protocolo del coste de memoria. |
+
