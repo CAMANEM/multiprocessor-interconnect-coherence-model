@@ -28,12 +28,26 @@ std::string fmt(const unsigned char* ptr, unsigned int len) {
     oss << v << " (0x" << std::hex << v << ")";
     return oss.str();
   }
+  // Writeback de linea completa (64 bytes): mostrar solo los bytes
+  // significativos (no cero) como numero. La cache almacena el dato
+  // en los primeros bytes; el resto de la linea son cero.
+  unsigned int sig = len;
+  while (sig > 1 && ptr[sig - 1] == 0x00) --sig;
+  if (sig <= 8) {
+    std::uint64_t v = 0;
+    for (unsigned int i = 0; i < sig; ++i)
+      v |= static_cast<std::uint64_t>(ptr[i]) << (8 * i);
+    std::ostringstream oss;
+    oss << v << " (0x" << std::hex << v << ")"
+        << std::dec << " [wb " << len << "B]";
+    return oss.str();
+  }
   std::ostringstream oss;
   oss << "[ ";
-  for (unsigned int i = 0; i < len; ++i)
+  for (unsigned int i = 0; i < len && i < 8; ++i)
     oss << "0x" << std::hex << std::setw(2) << std::setfill('0')
         << static_cast<unsigned int>(ptr[i]) << " ";
-  oss << "]";
+  oss << "... ]";
   return oss.str();
 }
 }  // namespace
