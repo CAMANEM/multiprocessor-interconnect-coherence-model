@@ -21,6 +21,8 @@ import platform
 import subprocess
 import threading
 from pathlib import Path
+from datetime import datetime
+from enum import Enum
 
 from PyQt6.QtCore import (Qt, QThread, pyqtSignal, QTimer,
                            QSettings, QSize)
@@ -37,6 +39,18 @@ from PyQt6.QtWidgets import (
     QCheckBox, QSpinBox, QFrame, QToolBar,
     QMessageBox, QSizePolicy
 )
+
+# ---------------------------------------------------------------
+#  Log levels
+# ---------------------------------------------------------------
+class LogLevel(Enum):
+    ERROR = 0
+    WARN = 1
+    INFO = 2
+    DEBUG = 3
+    
+    def __str__(self):
+        return self.name
 
 # ---------------------------------------------------------------
 #  Colores — tema oscuro estilo terminal
@@ -388,6 +402,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("CE4302 — Multiprocessor Coherence Studio")
         self.resize(1400, 860)
         self._worker = None
+        self._log_file = None
+        self._log_level = LogLevel.INFO
         self._apply_theme()
         self._build_ui()
         self._connect_signals()
@@ -678,11 +694,22 @@ class MainWindow(QMainWindow):
         ctrl_lay.addWidget(self.csv_check, 2, 1)
         ctrl_lay.addWidget(self.csv_path, 2, 2)
 
+        # Log file output
+        ctrl_lay.addWidget(self._label("Log file:"), 3, 0)
+        self.log_file_check = QCheckBox("Guardar logs")
+        self.log_file_check.setStyleSheet(f"color: {C_FG};")
+        self.log_file_path = QLineEdit("simulacion.log")
+        self.log_file_path.setStyleSheet(self._input_style())
+        self.log_file_path.setEnabled(False)
+        self.log_file_check.toggled.connect(self.log_file_path.setEnabled)
+        ctrl_lay.addWidget(self.log_file_check, 3, 1)
+        ctrl_lay.addWidget(self.log_file_path, 3, 2)
+
         # Log level
-        ctrl_lay.addWidget(self._label("Log:"), 3, 0)
+        ctrl_lay.addWidget(self._label("Log level:"), 4, 0)
         self.log_combo = QComboBox()
         self.log_combo.addItems(["warn", "info", "debug", "error"])
-        ctrl_lay.addWidget(self.log_combo, 3, 1)
+        ctrl_lay.addWidget(self.log_combo, 4, 1)
 
         lay.addWidget(ctrl)
 
@@ -858,11 +885,50 @@ class MainWindow(QMainWindow):
                "--log-level", log_level]
 
         if self.csv_check.isChecked() and self.csv_path.text().strip():
-            cmd += ["--csv", self.csv_path.text().strip()]
+            csv_file = self.csv_path.text().strip()
+            if not Path(csv_file).is_absolute():
+                csv_file = str(Path(traces_dir) / csv_file)
+            cmd += ["--csv", csv_file]
+
+        # Abrir archivo de log si está habilitado
+        self._log_file = None
+        log_file_path = None
+        if self.log_file_check.isChecked() and self.log_file_path.text().strip():
+            log_file_name = self.log_file_path.text().strip()
+            if not Path(log_file_name).is_absolute():
+                log_file_path = str(Path(traces_dir) / log_file_name)
+            else:
+                log_file_path = log_file_name
+            
+            # Establecer log level basado en la selección
+            log_level_str = self.log_combo.currentText().lower()
+            self._log_level = {
+                "error": LogLevel.ERROR,
+                "warn": LogLevel.WARN,
+                "info": LogLevel.INFO,
+                "debug": LogLevel.DEBUG
+            }.get(log_level_str, LogLevel.INFO)
+            
+            try:
+                self._log_file = open(log_file_path, "w", encoding="utf-8")
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                self._log_file.write(f"{'='*70}\n")
+                self._log_file.write(f"CE4302 Simulation Log\n")
+                self._log_file.write(f"Trace: {Path(trace_path).name}\n")
+                self._log_file.write(f"Protocol: {proto}\n")
+                self._log_file.write(f"Log Level: {self._log_level}\n")
+                self._log_file.write(f"Started: {now}\n")
+                self._log_file.write(f"{'='*70}\n\n")
+                self._log_file.flush()
+            except Exception as e:
+                self._error(f"No se puede crear archivo de log: {e}")
+                self._log_file = None
 
         self.console.clear_console()
         self.console.append_info(
             f"$ {' '.join(cmd)}\n")
+        if log_file_path:
+            self.console.append_info(f"Log guardando en: {log_file_path}\n")
         self._set_status(f"Ejecutando: {Path(trace_path).name} [{proto}]",
                          C_YELLOW)
         self.btn_run.setEnabled(False)
@@ -875,6 +941,10 @@ class MainWindow(QMainWindow):
 
     def _on_sim_line(self, line: str):
         """Colorea la salida de mp_sim segun el contenido."""
+        # Escribir al archivo de log si está abierto (formato formal)
+        if self._log_file and not self._log_file.closed:
+            self._write_formal_log(line)
+        
         lo = line.lower()
         if any(k in lo for k in ["error", "fallo", "[error"]):
             self.console.append_err(line)
@@ -897,7 +967,91 @@ class MainWindow(QMainWindow):
         else:
             self.console.append_line(line)
 
+    def _parse_cache_event(self, line: str) -> tuple:
+        """
+        Parsea líneas de caché como:
+        [t=1ns][L1-0] HIT LECTURA addr=0x8000...
+        Retorna: (timestamp, cache_id, event_type, message)
+        """
+        if not line.startswith("[t="):
+            return None
+        
+        try:
+            # Extraer timestamp: [t=1ns]
+            ts_end = line.find("]")
+            timestamp = line[4:ts_end]  # "1ns"
+            
+            # Extraer cache_id: [L1-0]
+            cache_end = line.find("]", ts_end + 1)
+            cache_part = line[ts_end+2:cache_end]  # "L1-0"
+            
+            # Resto del mensaje
+            rest = line[cache_end+2:].strip()
+            
+            # Determinar tipo de evento y nivel
+            rest_lower = rest.lower()
+            
+            if "error" in rest_lower or "fallo" in rest_lower:
+                level = LogLevel.ERROR
+            elif "miss" in rest_lower:
+                level = LogLevel.DEBUG
+            elif "hit" in rest_lower:
+                level = LogLevel.DEBUG
+            elif any(k in rest_lower for k in ["snoop", "writeback", "upgrade", "evict"]):
+                level = LogLevel.DEBUG
+            else:
+                level = LogLevel.DEBUG
+            
+            return (timestamp, cache_part, level, rest)
+        except:
+            return None
+
+    def _write_formal_log(self, line: str):
+        """Escribe logs en formato formal respetando log levels."""
+        
+        # Parsear eventos de caché
+        parsed = self._parse_cache_event(line)
+        if parsed:
+            timestamp, cache_id, level, message = parsed
+            
+            # Chequear si este nivel debe loguarse
+            if level.value > self._log_level.value:
+                return
+            
+            # Formato formal: [DATETIME] [LEVEL] [COMPONENT] MESSAGE
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            formal_line = f"[{now}] [{level}] [{cache_id}] {message}"
+            self._log_file.write(formal_line + "\n")
+            self._log_file.flush()
+        
+        # Líneas de estadísticas finales
+        elif line.startswith("bus_txns="):
+            if LogLevel.INFO.value <= self._log_level.value:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                formal_line = f"[{now}] [INFO] [STATS] {line}"
+                self._log_file.write(formal_line + "\n")
+                self._log_file.flush()
+        
+        # Errores generales
+        elif any(k in line.lower() for k in ["error", "fallo"]):
+            if LogLevel.ERROR.value <= self._log_level.value:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                formal_line = f"[{now}] [ERROR] [SYSTEM] {line}"
+                self._log_file.write(formal_line + "\n")
+                self._log_file.flush()
+
     def _on_sim_done(self, rc: int):
+        # Cerrar archivo de log si está abierto
+        if self._log_file and not self._log_file.closed:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            self._log_file.write(f"\n{'='*70}\n")
+            self._log_file.write(f"Simulation finished at: {now}\n")
+            self._log_file.write(f"Exit code: {rc}\n")
+            self._log_file.write(f"Status: {'SUCCESS' if rc == 0 else 'FAILED'}\n")
+            self._log_file.write(f"{'='*70}\n")
+            self._log_file.close()
+            self._log_file = None
+        
         self.btn_run.setEnabled(True)
         self.btn_compile.setEnabled(True)
         self.btn_stop.setEnabled(False)
@@ -913,11 +1067,20 @@ class MainWindow(QMainWindow):
     def _do_stop(self):
         if self._worker:
             self._worker.kill()
-            self.console.append_warn("\n[Simulacion detenida por el usuario]")
-            self.btn_run.setEnabled(True)
-            self.btn_compile.setEnabled(True)
-            self.btn_stop.setEnabled(False)
-            self._set_status("Detenido", C_YELLOW)
+        # Cerrar archivo de log si está abierto
+        if self._log_file and not self._log_file.closed:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            self._log_file.write(f"\n{'='*70}\n")
+            self._log_file.write(f"Simulation stopped at: {now}\n")
+            self._log_file.write(f"Reason: User interrupted\n")
+            self._log_file.write(f"{'='*70}\n")
+            self._log_file.close()
+            self._log_file = None
+        self.console.append_warn("\n[Simulacion detenida por el usuario]")
+        self.btn_run.setEnabled(True)
+        self.btn_compile.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self._set_status("Detenido", C_YELLOW)
 
     # ── Proceso generico ─────────────────────────────────────────
     def _run_process(self, cmd, on_line, on_done, use_console=True):
@@ -1012,6 +1175,8 @@ parallel {
 """
 
     def closeEvent(self, event):
+        if self._log_file and not self._log_file.closed:
+            self._log_file.close()
         if self._worker and self._worker.isRunning():
             self._worker.kill()
         self.path_settings.save()
