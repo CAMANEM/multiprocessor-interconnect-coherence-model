@@ -53,6 +53,7 @@ inline const char* op_name(MemoryOperation op) {
 
 // ---------------------------------------------------------------
 //  TraceEntry
+static constexpr int kMaxPes = 4;
 // ---------------------------------------------------------------
 struct TraceEntry {
   std::uint64_t   tick;

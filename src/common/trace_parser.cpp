@@ -195,12 +195,21 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
     entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok});
   }
 
-  std::sort(entries_.begin(), entries_.end(),
-    [](const TraceEntry& a, const TraceEntry& b) {
-      if (a.tick  != b.tick)  return a.tick  < b.tick;
-      if (a.pe_id != b.pe_id) return a.pe_id < b.pe_id;
+  // Round robin scheduling for entries with same tick. Orders by pe_id, starting from the PE of the last entry in the prev trace.
+  int rr_start = 0;
+  std::stable_sort(entries_.begin(), entries_.end(),
+    [&rr_start](const TraceEntry& a, const TraceEntry& b) {
+      if (a.tick != b.tick) {
+        return a.tick < b.tick;
+      }
+      const int ra = (a.pe_id - rr_start + kMaxPes) % kMaxPes;
+      const int rb = (b.pe_id - rr_start + kMaxPes) % kMaxPes;
+      if (ra != rb) return ra < rb;
       return a.address < b.address;
     });
+
+  if (!entries_.empty())
+    rr_start = (entries_.back().pe_id + 1) % kMaxPes;
 
   return true;
 }
