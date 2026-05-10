@@ -46,6 +46,9 @@ Interconnect::Interconnect(sc_core::sc_module_name name, Monitor* monitor,
   tgt3.register_b_transport(this, &Interconnect::b_transport3);
 
   caches_.fill(nullptr);
+  pending_.fill(false);
+  bus_time_.fill(sc_core::SC_ZERO_TIME);
+  SC_THREAD(arbiter);
 }
 
 /**
@@ -172,10 +175,67 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
   }
 }
 
+void Interconnect::forward_arbitrated(int id, tlm::tlm_generic_payload& trans,
+                                      sc_core::sc_time& delay) {
+  static thread_local bool in_forward = false;
+  if (in_forward) {
+    forward(id, trans, delay);
+    return;
+  }
+
+  pending_[id] = true;
+  request_ev_.notify(sc_core::SC_ZERO_TIME);
+
+  wait(grant_ev_[id]);
+
+  const sc_core::sc_time before = delay;
+  in_forward = true;
+  forward(id, trans, delay);
+  in_forward = false;
+  bus_time_[id] = delay - before;
+
+  done_ev_[id].notify(sc_core::SC_ZERO_TIME);
+}
+
+void Interconnect::arbiter() {
+  while (true) {
+    bool any_pending = false;
+    for (int pe = 0; pe < kPorts; ++pe) {
+      if (pending_[pe]) { any_pending = true; break; }
+    }
+
+    if (!any_pending) {
+      wait(request_ev_);
+      continue;
+    }
+
+    int chosen = -1;
+    for (int offset = 0; offset < kPorts; ++offset) {
+      const int pe = (next_grant_ + offset) % kPorts;
+      if (pending_[pe]) { chosen = pe; break; }
+    }
+
+    if (chosen < 0) {
+      wait(request_ev_);
+      continue;
+    }
+
+    pending_[chosen] = false;
+    grant_ev_[chosen].notify(sc_core::SC_ZERO_TIME);
+    wait(done_ev_[chosen]);
+
+    const sc_core::sc_time bus_time = bus_time_[chosen];
+    next_grant_ = (chosen + 1) % kPorts;
+    if (bus_time > sc_core::SC_ZERO_TIME) {
+      wait(bus_time);
+    }
+  }
+}
+
 /** Port dispatchers */
-void Interconnect::b_transport0(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(0, t, d); }
-void Interconnect::b_transport1(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(1, t, d); }
-void Interconnect::b_transport2(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(2, t, d); }
-void Interconnect::b_transport3(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(3, t, d); }
+void Interconnect::b_transport0(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(0, t, d); }
+void Interconnect::b_transport1(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(1, t, d); }
+void Interconnect::b_transport2(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(2, t, d); }
+void Interconnect::b_transport3(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(3, t, d); }
 
 }  // namespace mp

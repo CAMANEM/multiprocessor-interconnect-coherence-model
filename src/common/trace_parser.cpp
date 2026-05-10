@@ -147,6 +147,10 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
       error_out = "line " + std::to_string(line_no) + ": bad pe_id";
       return false;
     }
+    if (pe_id < 0 || pe_id >= kMaxPes) {
+      error_out = "line " + std::to_string(line_no) + ": pe_id out of range";
+      return false;
+    }
 
     // Parsear operacion (R, W, ADD, SUB)
     MemoryOperation op;
@@ -195,21 +199,12 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
     entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok});
   }
 
-  // Round robin scheduling for entries with same tick. Orders by pe_id, starting from the PE of the last entry in the prev trace.
-  int rr_start = 0;
+  // Deterministic order for per-PE extraction.
   std::stable_sort(entries_.begin(), entries_.end(),
-    [&rr_start](const TraceEntry& a, const TraceEntry& b) {
-      if (a.tick != b.tick) {
-        return a.tick < b.tick;
-      }
-      const int ra = (a.pe_id - rr_start + kMaxPes) % kMaxPes;
-      const int rb = (b.pe_id - rr_start + kMaxPes) % kMaxPes;
-      if (ra != rb) return ra < rb;
-      return a.address < b.address;
+    [](const TraceEntry& a, const TraceEntry& b) {
+      if (a.tick != b.tick) return a.tick < b.tick;
+      return a.pe_id < b.pe_id;
     });
-
-  if (!entries_.empty())
-    rr_start = (entries_.back().pe_id + 1) % kMaxPes;
 
   return true;
 }

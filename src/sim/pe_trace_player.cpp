@@ -259,9 +259,9 @@ void PeTracePlayer::thread_main() {
     // Registrar en EventLog con timestamp de lanzamiento
     std::ostringstream msg;
     msg << "----------------------------------------------------\n"
-        << "[PE-" << pe_id_
-        << " | tick=" << e.tick << " ns"
-        << " | op " << op_num << "/" << entries_.size() << "]\n"
+      << "[PE-" << pe_id_
+      << " | tick=" << e.tick << " ns"
+      << " | op " << op_num << "/" << entries_.size() << "]\n"
         << "  Operacion : " << op_label << "\n"
         << "  Direccion : 0x" << std::hex << std::setw(8) << std::setfill('0')
         << e.address << std::dec << "\n"

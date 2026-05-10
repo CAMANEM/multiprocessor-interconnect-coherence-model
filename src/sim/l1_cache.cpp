@@ -430,7 +430,7 @@ void L1Cache::writeback_line_to_mem(uint64_t line_addr,
   wb.set_byte_enable_ptr(nullptr);
   wb.set_dmi_allowed(false);
   wb.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-  mem_socket->b_transport(wb, delay);
+  emit_bus_transaction(BusTransaction::BusWrBack, wb, delay);
   std::ostringstream m;
   m << pfx(sc_core::sc_time_stamp(), id_)
     << "WRITEBACK     addr=0x" << std::hex << std::setw(8)
