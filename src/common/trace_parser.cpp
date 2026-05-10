@@ -147,6 +147,10 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
       error_out = "line " + std::to_string(line_no) + ": bad pe_id";
       return false;
     }
+    if (pe_id < 0 || pe_id >= kMaxPes) {
+      error_out = "line " + std::to_string(line_no) + ": pe_id out of range";
+      return false;
+    }
 
     // Parsear operacion (R, W, ADD, SUB)
     MemoryOperation op;
@@ -195,11 +199,11 @@ bool TraceFile::load(const std::string& path, std::string& error_out) {
     entries_.push_back(TraceEntry{tick, pe_id, op, address, size, value_tok});
   }
 
-  std::sort(entries_.begin(), entries_.end(),
+  // Deterministic order for per-PE extraction.
+  std::stable_sort(entries_.begin(), entries_.end(),
     [](const TraceEntry& a, const TraceEntry& b) {
-      if (a.tick  != b.tick)  return a.tick  < b.tick;
-      if (a.pe_id != b.pe_id) return a.pe_id < b.pe_id;
-      return a.address < b.address;
+      if (a.tick != b.tick) return a.tick < b.tick;
+      return a.pe_id < b.pe_id;
     });
 
   return true;

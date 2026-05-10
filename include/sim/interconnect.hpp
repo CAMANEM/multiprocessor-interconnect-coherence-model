@@ -63,6 +63,8 @@ public:
 
   tlm_utils::simple_initiator_socket<Interconnect> mem_socket;
 
+  SC_HAS_PROCESS(Interconnect);
+
   Interconnect(sc_core::sc_module_name name, Monitor* monitor,
                const sc_core::sc_time& latency);
 
@@ -75,6 +77,8 @@ private:
   void b_transport3(tlm::tlm_generic_payload&, sc_core::sc_time&);
 
   void forward(int id, tlm::tlm_generic_payload&, sc_core::sc_time&);
+  void forward_arbitrated(int id, tlm::tlm_generic_payload&, sc_core::sc_time&);
+  void arbiter();
   void snoop_all(int requester, uint64_t addr, BusTransaction type,
                  const tlm::tlm_generic_payload* trans);
 
@@ -88,6 +92,12 @@ private:
                                   sc_core::sc_time& delay, bool record_metrics);
 
   std::array<L1Cache*, kPorts> caches_;
+  std::array<bool, kPorts> pending_{};
+  std::array<sc_core::sc_time, kPorts> bus_time_{};
+  std::array<sc_core::sc_event, kPorts> grant_ev_{};
+  std::array<sc_core::sc_event, kPorts> done_ev_{};
+  sc_core::sc_event request_ev_;
+  int next_grant_{0};
 
   Monitor*          monitor_{ nullptr };
   sc_core::sc_time  latency_;

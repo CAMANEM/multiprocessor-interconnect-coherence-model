@@ -5,6 +5,7 @@
 #include <vector>
 #include <tlm>
 #include "log.hpp"
+#include "event_log.hpp"
 #include "interconnect.hpp"
 #include "l1_cache.hpp"
 #include "monitor.hpp"
@@ -27,6 +28,14 @@ const char* bus_txn_name(BusTransaction type) {
   return "Unknown";
 }
 
+thread_local int g_forward_depth = 0;
+thread_local bool g_grant_log = false;
+
+struct ForwardDepthGuard {
+  ForwardDepthGuard() { ++g_forward_depth; }
+  ~ForwardDepthGuard() { --g_forward_depth; }
+};
+
 }  // namespace
 
 /**
@@ -46,6 +55,9 @@ Interconnect::Interconnect(sc_core::sc_module_name name, Monitor* monitor,
   tgt3.register_b_transport(this, &Interconnect::b_transport3);
 
   caches_.fill(nullptr);
+  pending_.fill(false);
+  bus_time_.fill(sc_core::SC_ZERO_TIME);
+  SC_THREAD(arbiter);
 }
 
 /**
@@ -105,6 +117,7 @@ void Interconnect::memory_transport_chunked(int id, BusTransaction metrics_kind,
  */
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
+  ForwardDepthGuard guard;
   const tlm::tlm_command cmd = trans.get_command();
   const CoherenceHintExtension* hint = trans.get_extension<CoherenceHintExtension>();
   const BusTransaction bus_txn = hint ? hint->transaction
@@ -119,15 +132,17 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
     return;
   }
 
-  if (Log::enabled(LogLevel::Info)) {
-    std::ostringstream os;
-    os << "[IC] port=" << id << ' '
-       << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
-       << " txn=" << bus_txn_name(bus_txn)
-       << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
-       << trans.get_data_length() << " hop=" << latency_.to_string();
-    Log::info(os.str());
+  // Registrar transacción IC en EventLog (formal, no en consola)
+  std::ostringstream os;
+  os << "[IC] port=" << id << ' '
+     << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
+     << " txn=" << bus_txn_name(bus_txn)
+     << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
+     << trans.get_data_length() << " hop=" << latency_.to_string();
+  if (g_grant_log && g_forward_depth == 1) {
+    os << " grant=rr";
   }
+  EventLog::record(sc_core::sc_time_stamp(), os.str());
 
   const uint64_t addr = trans.get_address();
 
@@ -172,10 +187,89 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
   }
 }
 
+void Interconnect::forward_arbitrated(int id, tlm::tlm_generic_payload& trans,
+                                      sc_core::sc_time& delay) {
+  static thread_local bool in_forward = false;
+  if (in_forward) {
+    forward(id, trans, delay);
+    return;
+  }
+
+  pending_[id] = true;
+  request_ev_.notify(sc_core::SC_ZERO_TIME);
+
+  wait(grant_ev_[id]);
+
+  const sc_core::sc_time before = delay;
+  const bool prev_grant = g_grant_log;
+  g_grant_log = true;
+  in_forward = true;
+  forward(id, trans, delay);
+  in_forward = false;
+  g_grant_log = prev_grant;
+  bus_time_[id] = delay - before;
+
+  done_ev_[id].notify(sc_core::SC_ZERO_TIME);
+}
+
+void Interconnect::arbiter() {
+  while (true) {
+    bool any_pending = false;
+    for (int pe = 0; pe < kPorts; ++pe) {
+      if (pending_[pe]) { any_pending = true; break; }
+    }
+
+    if (!any_pending) {
+      wait(request_ev_);
+      continue;
+    }
+
+    int chosen = -1;
+    for (int offset = 0; offset < kPorts; ++offset) {
+      const int pe = (next_grant_ + offset) % kPorts;
+      if (pending_[pe]) { chosen = pe; break; }
+    }
+
+    if (chosen < 0) {
+      wait(request_ev_);
+      continue;
+    }
+
+    pending_[chosen] = false;
+    
+    // Registrar decisión de grant de forma sintetizada
+    std::ostringstream grant_msg;
+    grant_msg << "[ARBITER RoundRobin] GRANT PE" << chosen 
+              << " (pending: ";
+    for (int i = 0; i < kPorts; ++i) {
+      if (i != chosen && pending_[i]) grant_msg << i << " ";
+    }
+    grant_msg << ")";
+    EventLog::record(sc_core::sc_time_stamp(), grant_msg.str());
+
+    grant_ev_[chosen].notify(sc_core::SC_ZERO_TIME);
+    wait(done_ev_[chosen]);
+
+    const sc_core::sc_time bus_time = bus_time_[chosen];
+    int next_pos = (chosen + 1) % kPorts;
+    next_grant_ = next_pos;
+    
+    // Registrar finalización con posición siguiente
+    std::ostringstream done_msg;
+    done_msg << "[ARBITER RoundRobin] PE" << chosen << " completó (" 
+             << bus_time.to_string() << ") | próximo: PE" << next_pos;
+    EventLog::record(sc_core::sc_time_stamp(), done_msg.str());
+
+    if (bus_time > sc_core::SC_ZERO_TIME) {
+      wait(bus_time);
+    }
+  }
+}
+
 /** Port dispatchers */
-void Interconnect::b_transport0(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(0, t, d); }
-void Interconnect::b_transport1(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(1, t, d); }
-void Interconnect::b_transport2(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(2, t, d); }
-void Interconnect::b_transport3(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward(3, t, d); }
+void Interconnect::b_transport0(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(0, t, d); }
+void Interconnect::b_transport1(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(1, t, d); }
+void Interconnect::b_transport2(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(2, t, d); }
+void Interconnect::b_transport3(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { forward_arbitrated(3, t, d); }
 
 }  // namespace mp

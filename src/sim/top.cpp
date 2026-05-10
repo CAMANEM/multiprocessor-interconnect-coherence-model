@@ -30,7 +30,7 @@ Top::Top(sc_core::sc_module_name name, const TraceFile& trace,
     pe_[i] = std::make_unique<PeTracePlayer>(
         n.c_str(), i,
         trace.entries_for_pe(i),
-        &monitor_);   // <-- monitor para record_pe_operation
+      &monitor_);   // <-- monitor para record_pe_operation
   }
 
   // Bind PE -> L1
