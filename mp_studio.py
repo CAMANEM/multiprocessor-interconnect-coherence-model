@@ -1024,6 +1024,26 @@ class MainWindow(QMainWindow):
             self._log_file.write(formal_line + "\n")
             self._log_file.flush()
         
+        # Parsear eventos de interconnect [IC]
+        elif "[IC]" in line:
+            # Nivel INFO para eventos de IC
+            if LogLevel.INFO.value <= self._log_level.value:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                # Extraer solo la parte útil del log
+                ic_part = line[line.find("[IC]"):].strip()
+                formal_line = f"[{now}] [INFO] {ic_part}"
+                self._log_file.write(formal_line + "\n")
+                self._log_file.flush()
+        
+        # Parsear eventos de arbiter round-robin (sintetizados)
+        elif "[ARBITER RoundRobin]" in line:
+            # Nivel DEBUG para eventos de arbiter
+            if LogLevel.DEBUG.value <= self._log_level.value:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                formal_line = f"[{now}] [DEBUG] [ARBITER] {line[line.find('[ARBITER RoundRobin]')+21:].strip()}"
+                self._log_file.write(formal_line + "\n")
+                self._log_file.flush()
+        
         # Líneas de estadísticas finales
         elif line.startswith("bus_txns="):
             if LogLevel.INFO.value <= self._log_level.value:

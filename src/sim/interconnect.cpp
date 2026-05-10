@@ -5,6 +5,7 @@
 #include <vector>
 #include <tlm>
 #include "log.hpp"
+#include "event_log.hpp"
 #include "interconnect.hpp"
 #include "l1_cache.hpp"
 #include "monitor.hpp"
@@ -131,18 +132,17 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
     return;
   }
 
-  if (Log::enabled(LogLevel::Info)) {
-    std::ostringstream os;
-    os << "[IC] port=" << id << ' '
-       << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
-       << " txn=" << bus_txn_name(bus_txn)
-       << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
-       << trans.get_data_length() << " hop=" << latency_.to_string();
-    if (g_grant_log && g_forward_depth == 1) {
-      os << " grant=rr";
-    }
-    Log::info(os.str());
+  // Registrar transacción IC en EventLog (formal, no en consola)
+  std::ostringstream os;
+  os << "[IC] port=" << id << ' '
+     << (cmd == tlm::TLM_READ_COMMAND ? "R" : (cmd == tlm::TLM_WRITE_COMMAND ? "W" : "?"))
+     << " txn=" << bus_txn_name(bus_txn)
+     << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
+     << trans.get_data_length() << " hop=" << latency_.to_string();
+  if (g_grant_log && g_forward_depth == 1) {
+    os << " grant=rr";
   }
+  EventLog::record(sc_core::sc_time_stamp(), os.str());
 
   const uint64_t addr = trans.get_address();
 
@@ -236,11 +236,30 @@ void Interconnect::arbiter() {
     }
 
     pending_[chosen] = false;
+    
+    // Registrar decisión de grant de forma sintetizada
+    std::ostringstream grant_msg;
+    grant_msg << "[ARBITER RoundRobin] GRANT PE" << chosen 
+              << " (pending: ";
+    for (int i = 0; i < kPorts; ++i) {
+      if (i != chosen && pending_[i]) grant_msg << i << " ";
+    }
+    grant_msg << ")";
+    EventLog::record(sc_core::sc_time_stamp(), grant_msg.str());
+
     grant_ev_[chosen].notify(sc_core::SC_ZERO_TIME);
     wait(done_ev_[chosen]);
 
     const sc_core::sc_time bus_time = bus_time_[chosen];
-    next_grant_ = (chosen + 1) % kPorts;
+    int next_pos = (chosen + 1) % kPorts;
+    next_grant_ = next_pos;
+    
+    // Registrar finalización con posición siguiente
+    std::ostringstream done_msg;
+    done_msg << "[ARBITER RoundRobin] PE" << chosen << " completó (" 
+             << bus_time.to_string() << ") | próximo: PE" << next_pos;
+    EventLog::record(sc_core::sc_time_stamp(), done_msg.str());
+
     if (bus_time > sc_core::SC_ZERO_TIME) {
       wait(bus_time);
     }
