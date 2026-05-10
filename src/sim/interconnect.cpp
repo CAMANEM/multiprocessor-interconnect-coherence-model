@@ -27,6 +27,14 @@ const char* bus_txn_name(BusTransaction type) {
   return "Unknown";
 }
 
+thread_local int g_forward_depth = 0;
+thread_local bool g_grant_log = false;
+
+struct ForwardDepthGuard {
+  ForwardDepthGuard() { ++g_forward_depth; }
+  ~ForwardDepthGuard() { --g_forward_depth; }
+};
+
 }  // namespace
 
 /**
@@ -108,6 +116,7 @@ void Interconnect::memory_transport_chunked(int id, BusTransaction metrics_kind,
  */
 void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
                            sc_core::sc_time& delay) {
+  ForwardDepthGuard guard;
   const tlm::tlm_command cmd = trans.get_command();
   const CoherenceHintExtension* hint = trans.get_extension<CoherenceHintExtension>();
   const BusTransaction bus_txn = hint ? hint->transaction
@@ -129,6 +138,9 @@ void Interconnect::forward(int id, tlm::tlm_generic_payload& trans,
        << " txn=" << bus_txn_name(bus_txn)
        << " addr=0x" << std::hex << trans.get_address() << std::dec << " len="
        << trans.get_data_length() << " hop=" << latency_.to_string();
+    if (g_grant_log && g_forward_depth == 1) {
+      os << " grant=rr";
+    }
     Log::info(os.str());
   }
 
@@ -189,9 +201,12 @@ void Interconnect::forward_arbitrated(int id, tlm::tlm_generic_payload& trans,
   wait(grant_ev_[id]);
 
   const sc_core::sc_time before = delay;
+  const bool prev_grant = g_grant_log;
+  g_grant_log = true;
   in_forward = true;
   forward(id, trans, delay);
   in_forward = false;
+  g_grant_log = prev_grant;
   bus_time_[id] = delay - before;
 
   done_ev_[id].notify(sc_core::SC_ZERO_TIME);

@@ -178,6 +178,14 @@ Al terminar, `mp_sim` imprime una línea resumen del monitor, por ejemplo:
 
 - Se está utilizando arquitectura Little Endian para almacenar la infomacion en las direcciones de memoria tanto de la compartida como la caché.
 
+## Arbitraje de acceso a interconnect
+
+El interconnect modela un bus compartido con arbitraje round-robin entre los 4 PEs, el cual se aplica solo cuando una L1 necesita emitir una transaccion de bus (`BusRd`, `BusRdX`, `BusUpd`, `BusWrBack`); las operaciones que se resuelven con hits locales no pasan por el arbitraje.
+
+Cada puerto mantiene su request pendiente y el arbitro recorre circularmente desde `next_grant`, concediendo el bus al primer puerto pendiente y rotando el puntero al siguiente tras otorgar acceso. Mientras una transaccion esta en curso el bus queda ocupado y no se acepta otra; de modo que la siguiente concesion ocurre cuando la transaccion termina. Los writebacks generados durante snoops se emiten como `BusWrBack` y no disparan snoop adicional, pero respetan la misma serializacion del bus.
+
+En términos de los logs del interconnect, cada concesion para cada PE por parte del bus se anota en la misma linea con `grant=rr`.
+
 ## Próximos pasos sugeridos (no implementados aún)
 
 - Tabla y justificación de **transacciones de coherencia** (p. ej. `GetS`, `GetM`, `Inv`, `WB`) sobre TLM.
