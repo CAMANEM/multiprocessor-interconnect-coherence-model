@@ -279,7 +279,7 @@ class CodeEditor(QPlainTextEdit):
         """)
         self._highlighter = CE4302Highlighter(self.document())
         self.setPlaceholderText(
-            "# Escribe pseudocodigo CE4302 aqui...\n"
+            "# Escribe pseudocodigo aqui...\n"
             "# Ejemplo:\n"
             "# workload \"mi_programa\"\n"
             "# pe(0): write 0x8000 100\n"
@@ -399,7 +399,7 @@ class PathSettings(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CE4302 — Multiprocessor Coherence Studio")
+        self.setWindowTitle("Multiprocessor Coherence Studio")
         self.resize(1400, 860)
         self._worker = None
         self._log_file = None
@@ -534,7 +534,7 @@ class MainWindow(QMainWindow):
         lay.setSpacing(8)
 
         # Logo / titulo
-        title = QLabel("CE4302  ·  Coherence Studio")
+        title = QLabel("Coherence Studio")
         title.setStyleSheet(f"""
             font-size: 15px;
             font-weight: 700;
@@ -913,7 +913,7 @@ class MainWindow(QMainWindow):
                 self._log_file = open(log_file_path, "w", encoding="utf-8")
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 self._log_file.write(f"{'='*70}\n")
-                self._log_file.write(f"CE4302 Simulation Log\n")
+                self._log_file.write(f"Simulation Log\n")
                 self._log_file.write(f"Trace: {Path(trace_path).name}\n")
                 self._log_file.write(f"Protocol: {proto}\n")
                 self._log_file.write(f"Log Level: {self._log_level}\n")
@@ -1125,7 +1125,7 @@ class MainWindow(QMainWindow):
     def _open_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Abrir pseudocodigo", "",
-            "Programas CE4302 (*.txt);;Todos (*)")
+            "Programas (*.txt);;Todos (*)")
         if path:
             self.editor.setPlainText(
                 Path(path).read_text(encoding="utf-8"))
@@ -1135,7 +1135,7 @@ class MainWindow(QMainWindow):
     def _save_file(self):
         path, _ = QFileDialog.getSaveFileName(
             self, "Guardar pseudocodigo", "",
-            "Programas CE4302 (*.txt);;Todos (*)")
+            "Programas (*.txt);;Todos (*)")
         if path:
             Path(path).write_text(
                 self.editor.toPlainText(), encoding="utf-8")
@@ -1163,7 +1163,7 @@ class MainWindow(QMainWindow):
 
     def _default_program(self):
         return """\
-# CE4302 — Pseudocodigo de ejemplo
+# Pseudocodigo de ejemplo
 # Modifica este programa y presiona "Compilar"
 
 workload "contador_compartido"
@@ -1208,8 +1208,8 @@ parallel {
 # ---------------------------------------------------------------
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("CE4302 Coherence Studio")
-    app.setOrganizationName("CE4302")
+    app.setApplicationName("Coherence Studio")
+    app.setOrganizationName("Coherence Studio")
 
     # Fuente global
     font = QFont()
