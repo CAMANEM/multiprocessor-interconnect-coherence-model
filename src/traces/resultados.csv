@@ -1,7 +1,3 @@
 trace,protocol,sim_end_ns,bus_txns,bus_bytes,bus_rd,bus_rdx,bus_upd,bus_wb,state_trans,total_lat_ns,avg_lat_ns,bw_bytes_per_ns,pe_reads,pe_writes,pe_adds,pe_subs
-contador_compartido,msi,431000,52,368,6,46,0,0,22,2.184e+06,42000,0.000853828,2,2,2,2
-contador_atomico,msi,1.463e+06,160,1152,16,144,0,0,63,6.72e+06,42000,0.000787423,1,1,8,8
-adsfasdfasdfasdfasd,msi,1.463e+06,160,1152,16,144,0,0,63,6.72e+06,42000,0.000787423,1,1,8,8
-adsfasdfasdfasdfasd,msi,1.463e+06,160,1152,16,144,0,0,63,6.72e+06,42000,0.000787423,1,1,8,8
-adsfasdfasdfasdfasd,msi,1.463e+06,160,1152,16,144,0,0,63,6.72e+06,42000,0.000787423,1,1,8,8
-adsfasdfasdfasdfasd,msi,1.463e+06,160,1152,16,144,0,0,63,6.72e+06,42000,0.000787423,1,1,8,8
+producer_consumer_rmw,msi,721000,71,508,7,8,0,56,28,2.982e+06,42000,0.000704577,10,10,4,4
+migratory_atomic,firefly,1.076e+06,23,124,3,1,11,8,5,966000,42000,0.000115242,4,1,12,0

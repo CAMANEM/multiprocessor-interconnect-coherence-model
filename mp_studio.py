@@ -1,19 +1,3 @@
-"""
-mp_studio.py  —  CE4302 Multiprocessor Coherence Studio
-========================================================
-UI para compilar pseudocodigo .txt, generar traces y
-ejecutar mp_sim mostrando la salida en consola integrada.
-
-Requiere: PyQt6  (pip install PyQt6)
-Ejecutar : python mp_studio.py
-
-Estructura de carpetas esperada (ajustar en Settings si difiere):
-  <proyecto>/
-    src/build/tracegen    (o tracegen.exe en Windows)
-    src/build/mp_sim      (o mp_sim.exe en Windows)
-    src/traces/           (directorio de traces)
-    tools/                (fuentes .txt)
-"""
 
 import os
 import sys
@@ -1076,7 +1060,7 @@ class MainWindow(QMainWindow):
         self.btn_compile.setEnabled(True)
         self.btn_stop.setEnabled(False)
         if rc == 0:
-            self.console.append_ok("\n✓ Simulacion completada exitosamente")
+            self.console.append_ok("\nSimulacion completada exitosamente")
             self._set_status("Simulacion completada", C_GREEN)
         elif rc == -1:
             self._set_status("Error al ejecutar mp_sim", C_RED)

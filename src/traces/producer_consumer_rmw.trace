@@ -1,0 +1,34 @@
+# CE4302 trace v2
+# Workload: producer_consumer_rmw
+# Producers write and modify registers, then consumers read those registers
+# MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)
+#
+# tick  pe  op     addr        size  valor
+0 0 W 0x8000 4 0
+0 2 W 0x9000 4 100
+43 0 W 0x8000 4 1
+43 2 W 0x9000 4 101
+86 0 ADD 0x8000 4 10
+86 2 SUB 0x9000 4 1
+172 0 W 0x8000 4 2
+172 1 R 0x8000 4
+172 2 W 0x9000 4 102
+172 3 R 0x9000 4
+215 0 ADD 0x8000 4 20
+215 2 SUB 0x9000 4 2
+301 0 W 0x8000 4 3
+301 1 R 0x8000 4
+301 2 W 0x9000 4 103
+301 3 R 0x9000 4
+344 0 ADD 0x8000 4 30
+344 2 SUB 0x9000 4 3
+430 0 W 0x8000 4 4
+430 1 R 0x8000 4
+430 2 W 0x9000 4 104
+430 3 R 0x9000 4
+473 0 ADD 0x8000 4 40
+473 2 SUB 0x9000 4 4
+559 1 R 0x8000 4
+559 3 R 0x9000 4
+602 1 R 0x8000 4
+602 3 R 0x9000 4

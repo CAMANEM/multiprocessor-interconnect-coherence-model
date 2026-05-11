@@ -1,0 +1,80 @@
+workload "producer_consumer_rmw"
+description "Producers write and modify registers, then consumers read those registers"
+
+pes 4
+
+# Initialization
+parallel {
+    pe(0): write 0x8000 0
+    pe(2): write 0x9000 100
+}
+
+# Round 1
+parallel {
+    pe(0): write 0x8000 1
+    pe(2): write 0x9000 101
+}
+
+parallel {
+    pe(0): add 0x8000 10
+    pe(2): sub 0x9000 1
+}
+
+parallel {
+    pe(1): read 0x8000
+    pe(3): read 0x9000
+}
+
+# Round 2
+parallel {
+    pe(0): write 0x8000 2
+    pe(2): write 0x9000 102
+}
+
+parallel {
+    pe(0): add 0x8000 20
+    pe(2): sub 0x9000 2
+}
+
+parallel {
+    pe(1): read 0x8000
+    pe(3): read 0x9000
+}
+
+# Round 3
+parallel {
+    pe(0): write 0x8000 3
+    pe(2): write 0x9000 103
+}
+
+parallel {
+    pe(0): add 0x8000 30
+    pe(2): sub 0x9000 3
+}
+
+parallel {
+    pe(1): read 0x8000
+    pe(3): read 0x9000
+}
+
+# Round 4
+parallel {
+    pe(0): write 0x8000 4
+    pe(2): write 0x9000 104
+}
+
+parallel {
+    pe(0): add 0x8000 40
+    pe(2): sub 0x9000 4
+}
+
+parallel {
+    pe(1): read 0x8000
+    pe(3): read 0x9000
+}
+
+# Final Read
+parallel {
+    pe(1): read 0x8000
+    pe(3): read 0x9000
+}
