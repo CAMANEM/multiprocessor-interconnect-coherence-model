@@ -1,0 +1,31 @@
+# Coherence Simulator trace v2
+# Workload: test_logging_formal
+# Test para validar logging formal con distintos eventos
+# MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)
+#
+# tick  pe  op     addr        size  valor
+0 0 W 0x8000 4 100
+0 2 W 0x9000 4 200
+43 0 R 0x9000 4
+43 1 R 0x8000 4
+86 1 W 0x8000 4 150
+129 0 W 0xa000 4 1000
+172 1 ADD 0xa000 4 100
+258 2 SUB 0xa000 4 50
+344 3 R 0xa000 4
+387 0 W 0x10000 4 0
+430 0 W 0x10000 4 1
+473 0 W 0x10000 4 2
+516 0 W 0x10000 4 3
+559 0 W 0x10000 4 4
+602 0 W 0x10000 4 5
+645 0 W 0x10000 4 6
+688 0 W 0x10000 4 7
+731 0 W 0x10000 4 8
+774 0 W 0x10000 4 9
+817 0 W 0x10000 4 10
+860 0 W 0x10000 4 11
+903 0 R 0x8000 4
+903 1 R 0x9000 4
+903 2 R 0xa000 4
+903 3 R 0x10000 4

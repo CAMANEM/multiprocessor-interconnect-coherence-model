@@ -1,0 +1,406 @@
+[t=0 s][L1-0] MISS ESCRITURA addr=0x00008000  I->M
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRdX -> busca datos en memoria principal
+  [MEM t=0 s] ESCRITURA addr=0x00008000  valor=0 (0x0)  latencia=40 ns
+               Resultado: memoria respondio valor=0 (0x0)  nuevo estado=M
+[t=0 s][L1-2] MISS ESCRITURA addr=0x00009000  I->M
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRdX -> busca datos en memoria principal
+  [MEM t=0 s] ESCRITURA addr=0x00009000  valor=100 (0x64)  latencia=40 ns
+               Resultado: memoria respondio valor=100 (0x64)  nuevo estado=M
+----------------------------------------------------
+[PE-2 | tick=0 ns | op 1/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 100  ->  100 (0x64)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-0 | tick=0 ns | op 1/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 0  ->  0 (0x0)
+  Latencia acumulada: 44 ns
+[t=43 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=43 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=43 ns] LECTURA   addr=0x00008000  valor=0 (0x0)  latencia=40 ns
+               Resultado: memoria respondio valor=0 (0x0)  nuevo estado=S
+[t=43 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=43 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=43 ns] LECTURA   addr=0x00009000  valor=100 (0x64)  latencia=40 ns
+               Resultado: memoria respondio valor=100 (0x64)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=43 ns | op 1/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 0 (0x0)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=43 ns | op 1/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 100 (0x64)
+  Latencia acumulada: 44 ns
+[t=86 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=101 (0x65)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=86 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=86 ns] ESCRITURA addr=0x00009000  valor=101 (0x65)  latencia=40 ns
+[t=86 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=1 (0x1)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=86 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=86 ns] ESCRITURA addr=0x00008000  valor=1 (0x1)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=86 ns | op 2/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 101  ->  101 (0x65)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=86 ns | op 2/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 1  ->  1 (0x1)
+  Latencia acumulada: 43 ns
+[t=129 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=129 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=129 ns] LECTURA   addr=0x00009000  valor=101 (0x65)  latencia=40 ns
+               Resultado: memoria respondio valor=101 (0x65)  nuevo estado=S
+[t=129 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=129 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=129 ns] LECTURA   addr=0x00008000  valor=1 (0x1)  latencia=40 ns
+               Resultado: memoria respondio valor=1 (0x1)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=129 ns | op 2/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 1 (0x1)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=129 ns | op 2/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 101 (0x65)
+  Latencia acumulada: 44 ns
+[t=172 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=102 (0x66)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=172 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=172 ns] ESCRITURA addr=0x00009000  valor=102 (0x66)  latencia=40 ns
+[t=172 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=2 (0x2)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=172 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=172 ns] ESCRITURA addr=0x00008000  valor=2 (0x2)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=172 ns | op 3/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 102  ->  102 (0x66)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=172 ns | op 3/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 2  ->  2 (0x2)
+  Latencia acumulada: 43 ns
+[t=215 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=215 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=215 ns] LECTURA   addr=0x00009000  valor=102 (0x66)  latencia=40 ns
+               Resultado: memoria respondio valor=102 (0x66)  nuevo estado=S
+[t=215 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=215 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=215 ns] LECTURA   addr=0x00008000  valor=2 (0x2)  latencia=40 ns
+               Resultado: memoria respondio valor=2 (0x2)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=215 ns | op 3/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 2 (0x2)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=215 ns | op 3/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 102 (0x66)
+  Latencia acumulada: 44 ns
+[t=258 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=103 (0x67)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=258 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=258 ns] ESCRITURA addr=0x00009000  valor=103 (0x67)  latencia=40 ns
+[t=258 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=3 (0x3)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=258 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=258 ns] ESCRITURA addr=0x00008000  valor=3 (0x3)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=258 ns | op 4/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 103  ->  103 (0x67)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=258 ns | op 4/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 3  ->  3 (0x3)
+  Latencia acumulada: 43 ns
+[t=301 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=301 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=301 ns] LECTURA   addr=0x00009000  valor=103 (0x67)  latencia=40 ns
+               Resultado: memoria respondio valor=103 (0x67)  nuevo estado=S
+[t=301 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=301 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=301 ns] LECTURA   addr=0x00008000  valor=3 (0x3)  latencia=40 ns
+               Resultado: memoria respondio valor=3 (0x3)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=301 ns | op 4/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 3 (0x3)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=301 ns | op 4/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 103 (0x67)
+  Latencia acumulada: 44 ns
+[t=344 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=104 (0x68)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=344 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=344 ns] ESCRITURA addr=0x00009000  valor=104 (0x68)  latencia=40 ns
+[t=344 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=4 (0x4)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=344 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=344 ns] ESCRITURA addr=0x00008000  valor=4 (0x4)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=344 ns | op 5/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 104  ->  104 (0x68)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=344 ns | op 5/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 4  ->  4 (0x4)
+  Latencia acumulada: 43 ns
+[t=387 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=387 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=387 ns] LECTURA   addr=0x00009000  valor=104 (0x68)  latencia=40 ns
+               Resultado: memoria respondio valor=104 (0x68)  nuevo estado=S
+[t=387 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=387 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=387 ns] LECTURA   addr=0x00008000  valor=4 (0x4)  latencia=40 ns
+               Resultado: memoria respondio valor=4 (0x4)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=387 ns | op 5/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 4 (0x4)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=387 ns | op 5/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 104 (0x68)
+  Latencia acumulada: 44 ns
+[t=430 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=105 (0x69)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=430 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=430 ns] ESCRITURA addr=0x00009000  valor=105 (0x69)  latencia=40 ns
+[t=430 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=5 (0x5)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=430 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=430 ns] ESCRITURA addr=0x00008000  valor=5 (0x5)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=430 ns | op 6/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 105  ->  105 (0x69)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=430 ns | op 6/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 5  ->  5 (0x5)
+  Latencia acumulada: 43 ns
+[t=473 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=473 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=473 ns] LECTURA   addr=0x00009000  valor=105 (0x69)  latencia=40 ns
+               Resultado: memoria respondio valor=105 (0x69)  nuevo estado=S
+[t=473 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=473 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=473 ns] LECTURA   addr=0x00008000  valor=5 (0x5)  latencia=40 ns
+               Resultado: memoria respondio valor=5 (0x5)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=473 ns | op 6/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 5 (0x5)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=473 ns | op 6/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 105 (0x69)
+  Latencia acumulada: 44 ns
+[t=516 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=106 (0x6a)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=516 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=516 ns] ESCRITURA addr=0x00009000  valor=106 (0x6a)  latencia=40 ns
+[t=516 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=6 (0x6)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=516 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=516 ns] ESCRITURA addr=0x00008000  valor=6 (0x6)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=516 ns | op 7/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 106  ->  106 (0x6a)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=516 ns | op 7/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 6  ->  6 (0x6)
+  Latencia acumulada: 43 ns
+[t=559 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=559 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=559 ns] LECTURA   addr=0x00009000  valor=106 (0x6a)  latencia=40 ns
+               Resultado: memoria respondio valor=106 (0x6a)  nuevo estado=S
+[t=559 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=559 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=559 ns] LECTURA   addr=0x00008000  valor=6 (0x6)  latencia=40 ns
+               Resultado: memoria respondio valor=6 (0x6)  nuevo estado=S
+----------------------------------------------------
+[PE-1 | tick=559 ns | op 7/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 6 (0x6)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-3 | tick=559 ns | op 7/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 106 (0x6a)
+  Latencia acumulada: 44 ns
+[t=602 ns][L1-2] UPGRADE S->M  addr=0x00009000  valor=107 (0x6b)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=602 ns][L1-3] SNOOP BusRdX  addr=0x00009000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=602 ns] ESCRITURA addr=0x00009000  valor=107 (0x6b)  latencia=40 ns
+[t=602 ns][L1-0] UPGRADE S->M  addr=0x00008000  valor=7 (0x7)
+               Razon : linea compartida (S), requiere exclusividad
+               Accion: BusRdX -> invalida copias en otros caches
+[t=602 ns][L1-1] SNOOP BusRdX  addr=0x00008000  S->I  (otro cache pide exclusividad; INVALIDAMOS nuestra copia)
+  [MEM t=602 ns] ESCRITURA addr=0x00008000  valor=7 (0x7)  latencia=40 ns
+----------------------------------------------------
+[PE-2 | tick=602 ns | op 8/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor escrito: 107  ->  107 (0x6b)
+  Latencia acumulada: 43 ns
+----------------------------------------------------
+[PE-0 | tick=602 ns | op 8/8]
+  Operacion : ESCRITURA (W)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor escrito: 7  ->  7 (0x7)
+  Latencia acumulada: 43 ns
+[PE-2] Todas las operaciones completadas.
+[t=645 ns][L1-3] MISS LECTURA   addr=0x00009000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=645 ns][L1-2] SNOOP BusRd   addr=0x00009000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=645 ns] LECTURA   addr=0x00009000  valor=107 (0x6b)  latencia=40 ns
+               Resultado: memoria respondio valor=107 (0x6b)  nuevo estado=S
+[t=645 ns][L1-1] MISS LECTURA   addr=0x00008000  I->S
+               Razon : linea no esta en cache (Invalid)
+               Accion: BusRd  -> busca datos en memoria principal
+[t=645 ns][L1-0] SNOOP BusRd   addr=0x00008000  M->S  (otro cache pidio la linea; cedemos exclusividad)
+  [MEM t=645 ns] LECTURA   addr=0x00008000  valor=7 (0x7)  latencia=40 ns
+               Resultado: memoria respondio valor=7 (0x7)  nuevo estado=S
+[PE-0] Todas las operaciones completadas.
+----------------------------------------------------
+[PE-3 | tick=645 ns | op 8/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00009000
+  Tamano    : 4 bytes
+  Valor leido: 107 (0x6b)
+  Latencia acumulada: 44 ns
+----------------------------------------------------
+[PE-1 | tick=645 ns | op 8/8]
+  Operacion : LECTURA (R)
+  Direccion : 0x00008000
+  Tamano    : 4 bytes
+  Valor leido: 7 (0x7)
+  Latencia acumulada: 44 ns
+[PE-3] Todas las operaciones completadas.
+[PE-1] Todas las operaciones completadas.
+
+bus_txns=32 bus_bytes=128 total_latency=1344 ns bus_rd=16 bus_rdx=16 bus_upd=0 state_transitions=62

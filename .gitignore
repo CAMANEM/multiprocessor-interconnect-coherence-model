@@ -416,3 +416,8 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# CMake / out-of-source builds
+build/
+out/
+CMakeUserPresets.json

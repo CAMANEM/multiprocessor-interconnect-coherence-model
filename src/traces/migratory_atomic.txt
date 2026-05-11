@@ -1,0 +1,26 @@
+workload "migratory_atomic"
+description "Migracion controlada de una linea con RMW para ver comportamiento Firefly"
+
+pes 4
+
+# Inicializacion
+pe(0): write 0xA000 0
+
+barrier
+# FASE PRINCIPAL
+repeat 3 {
+    # PE0 modifica
+    pe(0): add 0xA000 1
+    # PE1 toma la linea
+    pe(1): add 0xA000 2
+    # PE2 toma la linea
+    pe(2): add 0xA000 3
+    # PE3 toma la linea
+    pe(3): add 0xA000 4
+    barrier
+}
+# LECTURA FINAL
+pe(0): read 0xA000
+pe(1): read 0xA000
+pe(2): read 0xA000
+pe(3): read 0xA000

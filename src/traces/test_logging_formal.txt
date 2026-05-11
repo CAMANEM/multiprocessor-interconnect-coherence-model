@@ -1,0 +1,73 @@
+# Test program para validar el sistema de logging formal
+# Genera miss/hits y transacciones para ver los logs correctamente formateados
+
+workload "test_logging_formal"
+description "Test para validar logging formal con distintos eventos"
+
+pes 4
+
+# ============================================================
+# Fase 1: Inicializacion y misses forzados
+# ============================================================
+
+# PE0 escribe en dirección A (miss - estado I->M)
+pe(0): write 0x8000 100
+
+# PE1 intenta leer desde A (debería ser hit después de BusRd)
+pe(1): read 0x8000
+
+# PE2 escribe en dirección B diferente (miss)
+pe(2): write 0x9000 200
+
+# ============================================================
+# Fase 2: Competencia y coherencia
+# ============================================================
+
+parallel {
+    # PE0 lee desde B (miss)
+    pe(0): read 0x9000
+    # PE1 escribe en A (upgrade S->M)
+    pe(1): write 0x8000 150
+}
+
+barrier
+
+# ============================================================
+# Fase 3: Operaciones atómicas (ADD/SUB)
+# ============================================================
+
+# Inicializar contador compartido
+pe(0): write 0xA000 1000
+
+# PE1 incrementa el contador (RMW: read + write)
+pe(1): add 0xA000 100
+
+# PE2 decrementa el contador
+pe(2): sub 0xA000 50
+
+# PE3 verifica el resultado
+pe(3): read 0xA000
+
+barrier
+
+# ============================================================
+# Fase 4: Stress de evicciones
+# ============================================================
+
+# Escribir en múltiples direcciones para forzar evicción LRU
+repeat 12 {
+    pe(0): write 0x10000 $i
+}
+
+barrier
+
+# ============================================================
+# Fase 5: Verificacion final
+# ============================================================
+
+parallel {
+    pe(0): read 0x8000
+    pe(1): read 0x9000
+    pe(2): read 0xA000
+    pe(3): read 0x10000
+}
