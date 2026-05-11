@@ -67,7 +67,7 @@ struct TraceEntry {
 // ---------------------------------------------------------------
 //  TraceFile
 //
-//  Formato CE4302 v2:
+//  Formato de Trace:
 //    tick  pe_id  R|W|ADD|SUB  address  [size]  [valor]
 //    '#' inicia comentario, lineas vacias se ignoran
 // ---------------------------------------------------------------

@@ -1,6 +1,6 @@
 # multiprocessor-interconnect-coherence-model
 
-Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0** (CE4302 — Arquitectura de Computadores II). Este repositorio contiene una base ejecutable: **4 PEs** como *trace players*, **L1 privadas** con selección de protocolo (**MSI** y **Firefly simplificado**), **interconnect** con cuatro puertos hacia **memoria compartida**, y **monitor** de métricas agregadas.
+Simulador de coherencia de caché e interconnect en **SystemC / TLM-2.0**. Este repositorio contiene una base ejecutable: **4 PEs** como *trace players*, **L1 privadas** con selección de protocolo (**MSI** y **Firefly simplificado**), **interconnect** con cuatro puertos hacia **memoria compartida**, y **monitor** de métricas agregadas.
 
 **Código:** cabeceras `.hpp` en [`include/sim/`](include/sim/) (modelo SystemC) y [`include/common/`](include/common/) (parser de trazas); implementaciones `.cpp` en [`src/sim/`](src/sim/) y [`src/common/`](src/common/). CMake añade esas rutas al compilador; en el código se usa `#include "nombre.hpp"`.
 
@@ -92,7 +92,7 @@ Ejecutables:
 - `build/mp_sim` — simulador principal (solo si SystemC está disponible)
 - `build/tracegen` — generador de trazas de ejemplo (productor-consumidor y migratorio)
 
-## Formato de traza (CE4302 trace v1)
+## Formato de traza
 
 Archivo texto UTF-8. Líneas que empiezan por `#` son comentarios. Cada acceso es una línea:
 

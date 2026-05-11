@@ -1,4 +1,4 @@
-# CE4302 trace v2
+# Coherence Simulator trace v2
 # Workload: producer_consumer_rmw
 # Producers write and modify registers, then consumers read those registers
 # MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)

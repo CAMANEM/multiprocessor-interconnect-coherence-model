@@ -1,6 +1,6 @@
 /**
- * tracegen.cpp  —  Generador y compilador de traces CE4302 v2
- * ============================================================
+ * tracegen.cpp  —  Generador y compilador de traces para simulador de coherencia
+ * ================================================================================
  *
  * Modos de uso:
  *   1. Workloads predefinidos:
@@ -211,7 +211,7 @@ public:
 
   // Escribe el trace al stream
   void write_to(std::ostream& os) const {
-    os << "# CE4302 trace v2\n";
+    os << "# Coherence Simulator trace v2\n";
     if (!name.empty())        os << "# Workload: " << name << "\n";
     if (!description.empty()) os << "# " << description << "\n";
     os << "# MISS_LATENCY=" << MISS_LATENCY << " ns"

@@ -60,7 +60,7 @@ FONT_UI     = "Segoe UI, SF Pro Display, system-ui, sans-serif"
 # ---------------------------------------------------------------
 #  Syntax Highlighter para pseudocodigo .txt
 # ---------------------------------------------------------------
-class CE4302Highlighter(QSyntaxHighlighter):
+class PseudocodeHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._rules = []
@@ -261,7 +261,7 @@ class CodeEditor(QPlainTextEdit):
                 selection-background-color: {C_ACCENT};
             }}
         """)
-        self._highlighter = CE4302Highlighter(self.document())
+        self._highlighter = PseudocodeHighlighter(self.document())
         self.setPlaceholderText(
             "# Escribe pseudocodigo aqui...\n"
             "# Ejemplo:\n"
@@ -278,7 +278,7 @@ class CodeEditor(QPlainTextEdit):
 class PathSettings(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._settings = QSettings("CE4302", "MPStudio")
+        self._settings = QSettings("CoherenceStudio", "Simulator")
         self._build()
         self._load()
 
@@ -789,17 +789,17 @@ class MainWindow(QMainWindow):
                     wl_name = parts[1].replace(" ", "_")
                 break
 
-        ce4302_path = str(Path(traces_dir) / f"{wl_name}.txt")
+        workload_path = str(Path(traces_dir) / f"{wl_name}.txt")
         trace_path  = str(Path(traces_dir) / f"{wl_name}.trace")
 
-        with open(ce4302_path, "w", encoding="utf-8") as f:
+        with open(workload_path, "w", encoding="utf-8") as f:
             f.write(src_text)
 
         self.trace_preview.clear_console()
         self.trace_preview.append_info(
-            f"Compilando {ce4302_path} -> {trace_path} ...")
+            f"Compilando {workload_path} -> {trace_path} ...")
 
-        cmd = [tracegen, "--compile", ce4302_path, "--output", trace_path]
+        cmd = [tracegen, "--compile", workload_path, "--output", trace_path]
         self._run_process(
             cmd,
             on_line=self._on_compile_line,
@@ -897,7 +897,7 @@ class MainWindow(QMainWindow):
                 self._log_file = open(log_file_path, "w", encoding="utf-8")
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 self._log_file.write(f"{'='*70}\n")
-                self._log_file.write(f"Simulation Log\n")
+                self._log_file.write(f"Coherence Simulator - Execution Log\n")
                 self._log_file.write(f"Trace: {Path(trace_path).name}\n")
                 self._log_file.write(f"Protocol: {proto}\n")
                 self._log_file.write(f"Log Level: {self._log_level}\n")

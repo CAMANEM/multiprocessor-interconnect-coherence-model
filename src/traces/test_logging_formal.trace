@@ -1,4 +1,4 @@
-# CE4302 trace v2
+# Coherence Simulator trace v2
 # Workload: test_logging_formal
 # Test para validar logging formal con distintos eventos
 # MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)

@@ -1,4 +1,4 @@
-# CE4302 trace v2
+# Coherence Simulator trace v2
 # Workload: add_sub_example
 # Contador en 0x8000 modificado con ADD/SUB por multiples PEs
 # MISS_LATENCY=43 ns  (L1=1 IC=2 MEM=40)
